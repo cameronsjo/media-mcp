@@ -73,7 +73,7 @@ export class SQLiteCache {
    */
   static makeKey(source: string, ...parts: (string | number | undefined)[]): string {
     const validParts = parts.filter((p): p is string | number => p !== undefined);
-    return `${source}:${validParts.map(p => String(p).toLowerCase().trim()).join(':')}`;
+    return `${source.toLowerCase()}:${validParts.map(p => String(p).toLowerCase().trim()).join(':')}`;
   }
 
   /**
