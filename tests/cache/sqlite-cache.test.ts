@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SQLiteCache, CacheTTL } from '../../src/cache/sqlite-cache.js';
 import { Logger } from '../../src/utils/logger.js';
 import * as fs from 'fs';
-import * as path from 'path';
 
 describe('SQLiteCache', () => {
   let cache: SQLiteCache;

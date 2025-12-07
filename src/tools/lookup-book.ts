@@ -1,30 +1,50 @@
 import { z } from 'zod';
-import type { BookResult, PartialBookData, LookupBookInput } from '../types/book.js';
+import type { BookResult, PartialBookData, LookupBookInput, BookSource } from '../types/book.js';
 import { OpenLibrarySource } from '../sources/open-library.js';
+import { GoogleBooksSource } from '../sources/google-books.js';
+import { GoodreadsSource } from '../sources/goodreads.js';
 import { Logger } from '../utils/logger.js';
+import { mergeBookResults } from '../utils/merge-results.js';
+import { extractSeriesFromTitle } from '../utils/fuzzy-match.js';
 
 export const LookupBookInputSchema = z.object({
   title: z.string().min(1).describe('Book title to search for'),
   author: z.string().optional().describe('Author name (recommended for better matching)'),
   isbn: z.string().optional().describe('ISBN-10 or ISBN-13 (preferred if available)'),
-  sources: z.array(z.enum(['open_library', 'google_books', 'goodreads', 'hardcover']))
+  sources: z
+    .array(z.enum(['open_library', 'google_books', 'goodreads', 'hardcover']))
     .optional()
     .describe('Sources to query (defaults to all available)'),
 });
 
+export interface BookSources {
+  openLibrary: OpenLibrarySource;
+  googleBooks: GoogleBooksSource;
+  goodreads: GoodreadsSource;
+}
+
 export class LookupBookTool {
   private openLibrary: OpenLibrarySource;
+  private googleBooks: GoogleBooksSource | null;
+  private goodreads: GoodreadsSource | null;
   private logger: Logger;
 
-  constructor(openLibrary: OpenLibrarySource, logger: Logger) {
+  constructor(
+    openLibrary: OpenLibrarySource,
+    logger: Logger,
+    additionalSources?: Partial<BookSources>
+  ) {
     this.openLibrary = openLibrary;
+    this.googleBooks = additionalSources?.googleBooks ?? null;
+    this.goodreads = additionalSources?.goodreads ?? null;
     this.logger = logger;
   }
 
   async execute(input: LookupBookInput): Promise<BookResult> {
     const startTime = Date.now();
-    const sourcesQueried: string[] = [];
-    const sourcesFailed: string[] = [];
+    const sourcesQueried: BookSource[] = [];
+    const sourcesFailed: BookSource[] = [];
+    const results: PartialBookData[] = [];
 
     this.logger.info('lookup-book', {
       action: 'start',
@@ -33,35 +53,39 @@ export class LookupBookTool {
       isbn: input.isbn,
     });
 
-    let result: PartialBookData | null = null;
+    // Determine which sources to query
+    const requestedSources = input.sources ?? ['open_library', 'google_books', 'goodreads'];
 
-    // Strategy 1: If ISBN provided, use it first
-    if (input.isbn) {
-      sourcesQueried.push('open_library');
-      result = await this.openLibrary.searchByISBN(input.isbn);
+    // Query sources in parallel for better performance
+    const searchPromises: Promise<void>[] = [];
 
-      if (!result) {
-        sourcesFailed.push('open_library');
-      }
+    // Open Library
+    if (requestedSources.includes('open_library')) {
+      searchPromises.push(this.searchOpenLibrary(input, results, sourcesQueried, sourcesFailed));
     }
 
-    // Strategy 2: Search by title and author
-    if (!result) {
-      sourcesQueried.push('open_library');
-      result = await this.openLibrary.searchByTitleAuthor(input.title, input.author);
-
-      if (!result && !sourcesFailed.includes('open_library')) {
-        sourcesFailed.push('open_library');
-      }
+    // Google Books
+    if (requestedSources.includes('google_books') && this.googleBooks) {
+      searchPromises.push(this.searchGoogleBooks(input, results, sourcesQueried, sourcesFailed));
     }
 
-    // If no result found, throw error
-    if (!result) {
+    // Goodreads (after other sources to avoid rate limiting)
+    if (requestedSources.includes('goodreads') && this.goodreads?.isEnabled()) {
+      searchPromises.push(this.searchGoodreads(input, results, sourcesQueried, sourcesFailed));
+    }
+
+    // Wait for all searches to complete
+    await Promise.all(searchPromises);
+
+    // If no results found, throw error
+    if (results.length === 0) {
       this.logger.warning('lookup-book', {
         action: 'not_found',
         title: input.title,
         author: input.author,
         isbn: input.isbn,
+        sources_queried: sourcesQueried,
+        sources_failed: sourcesFailed,
         duration_ms: Date.now() - startTime,
       });
 
@@ -72,99 +96,138 @@ export class LookupBookTool {
       };
     }
 
-    // Build the final result
-    const bookResult = this.buildResult(result, sourcesQueried, sourcesFailed);
+    // Try to extract series info from title if not found in results
+    for (const result of results) {
+      if (!result.series?.name) {
+        const seriesInfo = extractSeriesFromTitle(result.title || input.title);
+        if (seriesInfo.seriesName || seriesInfo.seriesPosition) {
+          result.series = {
+            name: seriesInfo.seriesName ?? undefined,
+            position: seriesInfo.seriesPosition ?? undefined,
+          };
+          // Update title to clean version if we extracted series
+          if (seriesInfo.cleanTitle !== result.title) {
+            result.title = seriesInfo.cleanTitle;
+          }
+        }
+      }
+    }
+
+    // Merge results from all sources
+    const bookResult = mergeBookResults(results, sourcesQueried, sourcesFailed);
 
     this.logger.info('lookup-book', {
       action: 'complete',
       title: bookResult.title,
       author: bookResult.author,
       sources_queried: sourcesQueried,
+      sources_succeeded: results.length,
+      sources_failed: sourcesFailed,
       duration_ms: Date.now() - startTime,
     });
 
     return bookResult;
   }
 
-  private buildResult(
-    data: PartialBookData,
-    sourcesQueried: string[],
-    sourcesFailed: string[]
-  ): BookResult {
-    return {
-      title: data.title ?? '',
-      author: data.author ?? data.authors?.[0] ?? 'Unknown',
-      authors: data.authors ?? (data.author ? [data.author] : []),
-      isbn_10: data.isbn_10 ?? null,
-      isbn_13: data.isbn_13 ?? null,
-      genres: data.genres ?? [],
-      subjects: data.subjects ?? [],
-      page_count: data.page_count ?? null,
-      publish_date: data.publish_date ?? null,
-      publisher: data.publisher ?? null,
-      description: data.description ?? null,
-      cover_url: data.cover_url ?? null,
-      series: {
-        name: data.series?.name ?? null,
-        position: data.series?.position ?? null,
-        total_books: data.series?.total_books ?? null,
-      },
-      ratings: {
-        open_library: data.rating
-          ? { score: data.rating.score, count: data.rating.count }
-          : undefined,
-      },
-      identifiers: {
-        open_library: data.identifier ?? null,
-        goodreads: null,
-        google_books: null,
-        hardcover: null,
-      },
-      source_urls: {
-        open_library: data.source_url ?? null,
-        goodreads: null,
-        google_books: null,
-      },
-      _meta: {
-        sources_queried: sourcesQueried,
-        sources_failed: sourcesFailed.length > 0 ? sourcesFailed : undefined,
-        primary_source: data.source,
-        confidence: this.calculateConfidence(data),
-        cached: false,
-        timestamp: new Date().toISOString(),
-      },
-    };
+  private async searchOpenLibrary(
+    input: LookupBookInput,
+    results: PartialBookData[],
+    sourcesQueried: BookSource[],
+    sourcesFailed: BookSource[]
+  ): Promise<void> {
+    sourcesQueried.push('open_library');
+
+    try {
+      let result: PartialBookData | null = null;
+
+      // Try ISBN first if available
+      if (input.isbn) {
+        result = await this.openLibrary.searchByISBN(input.isbn);
+      }
+
+      // Fall back to title/author search
+      if (!result) {
+        result = await this.openLibrary.searchByTitleAuthor(input.title, input.author);
+      }
+
+      if (result) {
+        results.push(result);
+      } else {
+        sourcesFailed.push('open_library');
+      }
+    } catch (error) {
+      this.logger.error('lookup-book', {
+        action: 'source_error',
+        source: 'open_library',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      sourcesFailed.push('open_library');
+    }
   }
 
-  private calculateConfidence(data: PartialBookData): 'high' | 'medium' | 'low' {
-    let score = 0;
+  private async searchGoogleBooks(
+    input: LookupBookInput,
+    results: PartialBookData[],
+    sourcesQueried: BookSource[],
+    sourcesFailed: BookSource[]
+  ): Promise<void> {
+    if (!this.googleBooks) return;
 
-    // Title is always present
-    score += 10;
+    sourcesQueried.push('google_books');
 
-    // Author info
-    if (data.author || data.authors?.length) score += 15;
+    try {
+      let result: PartialBookData | null = null;
 
-    // ISBN
-    if (data.isbn_10 || data.isbn_13) score += 20;
+      // Try ISBN first if available
+      if (input.isbn) {
+        result = await this.googleBooks.searchByISBN(input.isbn);
+      }
 
-    // Cover
-    if (data.cover_url) score += 10;
+      // Fall back to title/author search
+      if (!result) {
+        result = await this.googleBooks.searchByTitleAuthor(input.title, input.author);
+      }
 
-    // Description
-    if (data.description) score += 15;
+      if (result) {
+        results.push(result);
+      } else {
+        sourcesFailed.push('google_books');
+      }
+    } catch (error) {
+      this.logger.error('lookup-book', {
+        action: 'source_error',
+        source: 'google_books',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      sourcesFailed.push('google_books');
+    }
+  }
 
-    // Page count
-    if (data.page_count) score += 10;
+  private async searchGoodreads(
+    input: LookupBookInput,
+    results: PartialBookData[],
+    sourcesQueried: BookSource[],
+    sourcesFailed: BookSource[]
+  ): Promise<void> {
+    if (!this.goodreads?.isEnabled()) return;
 
-    // Ratings
-    if (data.rating) score += 10;
+    sourcesQueried.push('goodreads');
 
-    // Subjects/genres
-    if (data.subjects?.length) score += 10;
+    try {
+      const result = await this.goodreads.searchBook(input.title, input.author);
 
-    if (score >= 70) return 'high';
-    if (score >= 40) return 'medium';
-    return 'low';
+      if (result) {
+        results.push(result);
+      } else {
+        sourcesFailed.push('goodreads');
+      }
+    } catch (error) {
+      this.logger.error('lookup-book', {
+        action: 'source_error',
+        source: 'goodreads',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      sourcesFailed.push('goodreads');
+    }
   }
 }
