@@ -1,0 +1,41 @@
+{
+  "server": {
+    "name": "media-metadata-mcp",
+    "version": "1.0.0"
+  },
+  "transport": "stdio",
+  "http": {
+    "port": 3000,
+    "host": "127.0.0.1",
+    "basePath": "/mcp"
+  },
+  "apis": {
+    "tmdb": {
+      "apiKey": "${TMDB_API_KEY}",
+      "baseUrl": "https://api.themoviedb.org/3"
+    },
+    "googleBooks": {
+      "apiKey": "${GOOGLE_BOOKS_API_KEY}",
+      "enabled": false
+    },
+    "hardcover": {
+      "apiKey": "${HARDCOVER_API_KEY}",
+      "enabled": false
+    }
+  },
+  "scraping": {
+    "goodreads": {
+      "enabled": false,
+      "delayMs": 1500,
+      "proxy": null
+    }
+  },
+  "cache": {
+    "enabled": true,
+    "path": "./cache.db",
+    "defaultTTLHours": 168
+  },
+  "logging": {
+    "level": "info"
+  }
+}
