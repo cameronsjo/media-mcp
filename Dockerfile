@@ -1,10 +1,14 @@
 # syntax=docker/dockerfile:1
 
-# Build stage
-FROM node:20-alpine AS builder
+# Build stage - use slim for better native module compatibility
+FROM node:20-slim AS builder
 
 # Install build dependencies for better-sqlite3
-RUN apk add --no-cache python3 make g++
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -22,26 +26,30 @@ COPY src ./src
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine AS production
+FROM node:20-slim AS production
 
 # Install runtime dependencies for better-sqlite3
-RUN apk add --no-cache python3 make g++
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only (rebuilds native modules for alpine)
-RUN npm ci --omit=dev && \
-    npm cache clean --force
+# Install production dependencies only
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy built application
 COPY --from=builder /app/dist ./dist
 
 # Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001 -G nodejs
+RUN groupadd -g 1001 nodejs && \
+    useradd -u 1001 -g nodejs -m nodejs
 
 # Create cache directory with proper permissions
 RUN mkdir -p /app/cache && chown nodejs:nodejs /app/cache
