@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+
+# Build output (rebuilt in container)
+dist/
+
+# Development files
+*.log
+*.local
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+tests/
+coverage/
+*.test.ts
+*.spec.ts
+vitest.config.ts
+.nyc_output/
+
+# Git
+.git/
+.gitignore
+
+# Documentation (not needed in runtime)
+docs/
+*.md
+!README.md
+
+# CI/CD
+.github/
+
+# Misc
+*.tgz
+*.tar.gz
+.husky/
+.eslintrc*
+.prettierrc*
+eslint.config.js
