@@ -25,24 +25,22 @@ COPY src ./src
 # Build TypeScript
 RUN npm run build
 
+# Prune dev dependencies, keeping only production deps with compiled native modules
+RUN npm prune --omit=dev
+
 # Production stage
 FROM node:20-slim AS production
 
-# Install runtime dependencies for better-sqlite3
-RUN apt-get update && apt-get install -y \
-    python3 \
-    make \
-    g++ \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
+# Install wget for health checks
+RUN apt-get update && apt-get install -y wget && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only (--ignore-scripts skips husky setup)
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+# Copy node_modules from builder (already pruned to production only, with native modules compiled)
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy built application
 COPY --from=builder /app/dist ./dist
