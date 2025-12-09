@@ -214,17 +214,20 @@ const server = new Server(
   }
 );
 
-// Set up log emitter
-logger.setEmitter((entry) => {
-  server.notification({
-    method: 'notifications/message',
-    params: {
-      level: entry.level,
-      logger: entry.logger,
-      data: entry.data,
-    },
+// Set up log emitter (only for stdio transport where server is connected)
+// For HTTP transport, logs are written to stderr only
+if (config.transport === 'stdio') {
+  logger.setEmitter((entry) => {
+    server.notification({
+      method: 'notifications/message',
+      params: {
+        level: entry.level,
+        logger: entry.logger,
+        data: entry.data,
+      },
+    });
   });
-});
+}
 
 // Handle list tools request
 server.setRequestHandler(ListToolsRequestSchema, async () => {
