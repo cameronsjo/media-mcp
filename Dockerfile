@@ -41,8 +41,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only
-RUN npm ci --omit=dev && npm cache clean --force
+# Install production dependencies only (--ignore-scripts skips husky setup)
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 # Copy built application
 COPY --from=builder /app/dist ./dist
