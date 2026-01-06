@@ -61,6 +61,8 @@ export const BookResultSchema = z.object({
   isbn_13: z.string().nullable(),
   genres: z.array(z.string()),
   subjects: z.array(z.string()),
+  tropes: z.array(z.string()),
+  shelves: z.array(z.string()),
   page_count: z.number().int().positive().nullable(),
   publish_date: z.string().nullable(),
   publisher: z.string().nullable(),
@@ -83,6 +85,8 @@ export interface PartialBookData {
   isbn_13?: string | null;
   genres?: string[];
   subjects?: string[];
+  tropes?: string[];
+  shelves?: string[];
   page_count?: number | null;
   publish_date?: string | null;
   publisher?: string | null;

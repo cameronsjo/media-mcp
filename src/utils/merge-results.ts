@@ -23,6 +23,8 @@ const FIELD_SOURCE_PREFERENCE: Partial<Record<keyof PartialBookData, BookSource[
   page_count: ['open_library', 'google_books', 'goodreads'],
   isbn_10: ['open_library', 'google_books'],
   isbn_13: ['open_library', 'google_books'],
+  tropes: ['goodreads'],
+  shelves: ['goodreads'],
 };
 
 /**
@@ -54,6 +56,8 @@ export function mergeBookResults(
     isbn_13: selectBestValue(results, 'isbn_13', null),
     genres: mergeArrays(results.map((r) => r.genres).filter(Boolean) as string[][]),
     subjects: mergeArrays(results.map((r) => r.subjects).filter(Boolean) as string[][]),
+    tropes: mergeArrays(results.map((r) => r.tropes).filter(Boolean) as string[][]),
+    shelves: mergeArrays(results.map((r) => r.shelves).filter(Boolean) as string[][]),
     page_count: selectBestValue(results, 'page_count', null),
     publish_date: selectBestValue(results, 'publish_date', null),
     publisher: selectBestValue(results, 'publisher', null),
@@ -276,6 +280,7 @@ function calculateConfidence(
   if (result.description) score += 10;
   if (result.page_count) score += 5;
   if (result.genres.length > 0) score += 5;
+  if (result.tropes.length > 0) score += 5;
   if (result.series.name) score += 10;
   if (Object.keys(result.ratings).length > 0) score += 10;
 

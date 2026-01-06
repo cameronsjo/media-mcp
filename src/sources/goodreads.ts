@@ -197,6 +197,35 @@ export class GoodreadsSource {
         }
       });
 
+      // Extract shelves/tropes from user shelves
+      const shelves: string[] = [];
+      const tropes: string[] = [];
+
+      // Try to extract from popular shelves section
+      $('.BookPageMetadataSection__shelves .ShelfList .Button__labelItem, .actionLinkLite.bookPageGenreLink, .elementList .left .actionLinkLite, .greyText.stacked .left .actionLinkLite').each((_, el) => {
+        const shelfText = $(el).text().trim();
+        if (shelfText && !shelves.includes(shelfText)) {
+          shelves.push(shelfText);
+
+          // Common romance/fantasy tropes to extract
+          if (this.isTrope(shelfText)) {
+            tropes.push(shelfText);
+          }
+        }
+      });
+
+      // Also look for popular shelves in the right sidebar
+      $('.bigBox .bigBoxBody .elementList .left a').each((_, el) => {
+        const shelfText = $(el).text().trim();
+        if (shelfText && !shelves.includes(shelfText)) {
+          shelves.push(shelfText);
+
+          if (this.isTrope(shelfText)) {
+            tropes.push(shelfText);
+          }
+        }
+      });
+
       // Extract series info
       const seriesInfo = this.extractSeriesInfo($);
 
@@ -218,6 +247,8 @@ export class GoodreadsSource {
       const result: PartialBookData = {
         rating: rating && ratingCount ? { score: rating, count: ratingCount } : undefined,
         genres,
+        shelves: shelves.length > 0 ? shelves : undefined,
+        tropes: tropes.length > 0 ? tropes : undefined,
         series: seriesInfo
           ? {
               name: seriesInfo.name,
@@ -351,5 +382,124 @@ export class GoodreadsSource {
   private extractSeriesId(url: string): string | null {
     const match = url.match(/\/series\/(\d+)/);
     return match ? match[1] : null;
+  }
+
+  /**
+   * Determine if a shelf name is a trope
+   */
+  private isTrope(shelfName: string): boolean {
+    const normalized = shelfName.toLowerCase().replace(/[-_\s]/g, '');
+
+    // Common romance tropes
+    const romanceTropes = [
+      'enemiestolovers',
+      'friendstolovers',
+      'forcedproximity',
+      'fakedating',
+      'fakemarriage',
+      'onebedtrope',
+      'grumpysunshine',
+      'secondchance',
+      'brothersbestfriend',
+      'bestfriendsbrother',
+      'agegap',
+      'forbiddenromance',
+      'slowburn',
+      'instalove',
+      'fatedmates',
+      'soulmates',
+      'loveatfirstsight',
+      'marriageofconvenience',
+      'arrangedmarriage',
+      'secretrelationship',
+      'officeromance',
+      'workplaceromance',
+      'bossemployee',
+      'teacherstudent',
+      'royalromance',
+      'billionaireromance',
+      'smalltown',
+      'smalltownromance',
+      'hockyromance',
+      'sportsromance',
+      'rockstarromance',
+      'militaryromance',
+      'cowboyromance',
+      'alphamale',
+      'touchhimanddie',
+      'possessive',
+      'protectivehero',
+      'damselindistress',
+      'savedbythehero',
+    ];
+
+    // Fantasy/paranormal tropes
+    const fantasyTropes = [
+      'chosenone',
+      'magicschool',
+      'academy',
+      'foundfamily',
+      'mentorship',
+      'questadventure',
+      'dragonsromance',
+      'vampireromance',
+      'werewolfromance',
+      'shifterromance',
+      'witches',
+      'faerie',
+      'fae',
+      'mythologicalbeings',
+      'alienromance',
+      'timetravel',
+      'parallelworlds',
+      'prophecy',
+      'comingofage',
+    ];
+
+    // Dark romance/BDSM tropes
+    const darkTropes = [
+      'darkromance',
+      'bdsm',
+      'femdom',
+      'maledom',
+      'domsubrelationship',
+      'powerdynamics',
+      'taboo',
+      'dubcon',
+      'noncon',
+      'captive',
+      'kidnapping',
+      'stalker',
+      'obsession',
+      'antiherohero',
+      'villainromance',
+      'morallygray',
+      'whychoose',
+      'reverseharems',
+    ];
+
+    // Other relationship tropes
+    const otherTropes = [
+      'polyamory',
+      'polyamorous',
+      'menage',
+      'mmf',
+      'mfm',
+      'mmm',
+      'fff',
+      'lgbtq',
+      'mm',
+      'ff',
+      'sapphic',
+      'queerromance',
+      'trans',
+      'nonbinary',
+      'neurodivergent',
+      'disabledprotagonist',
+    ];
+
+    const allTropes = [...romanceTropes, ...fantasyTropes, ...darkTropes, ...otherTropes];
+
+    return allTropes.some((trope) => normalized.includes(trope) || trope.includes(normalized));
   }
 }
