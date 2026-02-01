@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
 import { delay } from '../utils/rate-limiter.js';
+import { normalizeShelf } from '../utils/strings.js';
 import type { PartialBookData, BookSource } from '../types/book.js';
 
 const SOURCE: BookSource = 'goodreads';
@@ -388,7 +389,7 @@ export class GoodreadsSource {
    * Determine if a shelf name is a trope
    */
   private isTrope(shelfName: string): boolean {
-    const normalized = shelfName.toLowerCase().replace(/[-_\s]/g, '');
+    const normalized = normalizeShelf(shelfName);
 
     // Common romance tropes
     const romanceTropes = [

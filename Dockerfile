@@ -63,7 +63,7 @@ ENV NODE_ENV=production \
     MCP_HTTP_PATH=/mcp \
     MCP_CACHE_ENABLED=true \
     MCP_CACHE_PATH=/app/cache/cache.db \
-    LOG_LEVEL=info
+    MCP_LOG_LEVEL=info
 
 # Expose HTTP port
 EXPOSE 3000

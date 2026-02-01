@@ -263,12 +263,14 @@ media-metadata-mcp/
 ├── src/
 │   ├── index.ts              # MCP server entry
 │   ├── tools/
+│   │   ├── index.ts
 │   │   ├── lookup-book.ts
 │   │   ├── lookup-movie.ts
 │   │   ├── lookup-tv.ts
 │   │   ├── batch-lookup.ts
 │   │   └── generate-frontmatter.ts
 │   ├── sources/
+│   │   ├── index.ts
 │   │   ├── open-library.ts
 │   │   ├── google-books.ts
 │   │   ├── goodreads.ts
@@ -277,12 +279,23 @@ media-metadata-mcp/
 │   │   └── sqlite-cache.ts
 │   ├── transport/
 │   │   └── http-transport.ts
-│   └── utils/
-│       ├── config.ts
-│       ├── logger.ts
-│       ├── rate-limiter.ts
-│       └── http-client.ts
+│   ├── utils/
+│   │   ├── index.ts
+│   │   ├── config.ts
+│   │   ├── logger.ts
+│   │   ├── rate-limiter.ts
+│   │   ├── http-client.ts
+│   │   ├── fuzzy-match.ts
+│   │   ├── merge-results.ts
+│   │   └── telemetry.ts
+│   └── types/
+│       ├── index.ts
+│       ├── book.ts
+│       ├── movie.ts
+│       ├── tv.ts
+│       └── common.ts
 ├── tests/
+├── Dockerfile
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -309,6 +322,57 @@ The server uses SQLite for caching with the following TTLs:
 | Movie/TV metadata | 7 days |
 | TV episodes (active shows) | 1 day |
 | Search results | 1 hour |
+
+## Docker
+
+### Build
+
+```bash
+docker build -t media-metadata-mcp .
+```
+
+### Run
+
+```bash
+docker run -d \
+  --name media-mcp \
+  -p 3000:3000 \
+  -e TMDB_API_KEY=your-key \
+  -v media-mcp-cache:/app/cache \
+  media-metadata-mcp
+```
+
+### Docker Compose
+
+```yaml
+services:
+  media-mcp:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY}  # optional
+    volumes:
+      - media-mcp-cache:/app/cache
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  media-mcp-cache:
+```
+
+### Health Check
+
+The HTTP server exposes a health endpoint at `/health`:
+
+```bash
+curl http://localhost:3000/health
+# {"status":"healthy","sessions":0,"timestamp":"..."}
+```
 
 ## Development
 

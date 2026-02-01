@@ -1,4 +1,5 @@
 import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
+import { normalizeForComparison } from '../utils/strings.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
 import type { PartialBookData, BookSource } from '../types/book.js';
 
@@ -245,15 +246,15 @@ export class GoogleBooksSource {
   ): GoogleBooksVolume | null {
     if (items.length === 0) return null;
 
-    const normalizedTitle = this.normalize(title);
-    const normalizedAuthor = author ? this.normalize(author) : null;
+    const normalizedTitle = normalizeForComparison(title);
+    const normalizedAuthor = author ? normalizeForComparison(author) : null;
 
     const scored = items.map((item) => {
       let score = 0;
       const info = item.volumeInfo;
 
       // Title similarity
-      const itemTitle = this.normalize(info.title);
+      const itemTitle = normalizeForComparison(info.title);
       if (itemTitle === normalizedTitle) {
         score += 100;
       } else if (itemTitle.includes(normalizedTitle) || normalizedTitle.includes(itemTitle)) {
@@ -262,7 +263,7 @@ export class GoogleBooksSource {
 
       // Author match
       if (normalizedAuthor && info.authors) {
-        const itemAuthors = info.authors.map((a) => this.normalize(a));
+        const itemAuthors = info.authors.map((a) => normalizeForComparison(a));
         if (itemAuthors.some((a) => a === normalizedAuthor)) {
           score += 80;
         } else if (
@@ -286,14 +287,4 @@ export class GoogleBooksSource {
     return scored[0].score >= 50 ? scored[0].item : null;
   }
 
-  /**
-   * Normalize string for comparison
-   */
-  private normalize(str: string): string {
-    return str
-      .toLowerCase()
-      .replace(/[^\w\s]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
 }

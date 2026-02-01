@@ -1,6 +1,6 @@
 import { request, type Dispatcher } from 'undici';
 import { Logger } from './logger.js';
-import { RateLimiter } from './rate-limiter.js';
+import { RateLimiter, sleep } from './rate-limiter.js';
 
 export interface HttpResponse<T = unknown> {
   status: number;
@@ -14,11 +14,12 @@ export interface HttpClientOptions {
   timeout?: number;
 }
 
+// User agents for anti-bot evasion. Updated January 2026.
 const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/134.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15',
 ];
 
 /**
@@ -162,7 +163,7 @@ export class HttpClient {
               attempt,
               backoff_ms: backoffMs,
             });
-            await this.sleep(backoffMs);
+            await sleep(backoffMs);
             continue;
           }
         }
@@ -205,15 +206,11 @@ export class HttpClient {
 
         if (attempt < retries) {
           const backoffMs = Math.pow(2, attempt) * 1000;
-          await this.sleep(backoffMs);
+          await sleep(backoffMs);
         }
       }
     }
 
     throw lastError ?? new Error('Request failed after retries');
-  }
-
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }

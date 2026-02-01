@@ -26,6 +26,10 @@ const BatchTVItemSchema = z.object({
   title: z.string().min(1),
   year: z.number().int().optional(),
   tmdb_id: z.number().int().optional(),
+  include_seasons: z.boolean().default(true)
+    .describe('Include season details in response'),
+  include_episodes: z.boolean().default(false)
+    .describe('Include episode details in response'),
 });
 
 const BatchItemSchema = z.union([
@@ -164,8 +168,8 @@ export class BatchLookupTool {
             title: item.title,
             year: item.year,
             tmdb_id: item.tmdb_id,
-            include_seasons: true,
-            include_episodes: false,
+            include_seasons: item.include_seasons,
+            include_episodes: item.include_episodes,
           });
           break;
       }

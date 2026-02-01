@@ -110,7 +110,7 @@ export class RateLimiter {
         source,
         wait_ms: waitMs,
       });
-      await this.sleep(waitMs);
+      await sleep(waitMs);
     }
 
     // Wait for window to reset if at limit
@@ -123,7 +123,7 @@ export class RateLimiter {
           source,
           wait_ms: waitMs,
         });
-        await this.sleep(waitMs);
+        await sleep(waitMs);
         // Reset after waiting
         state.requests = 0;
         state.windowStart = Date.now();
@@ -157,16 +157,20 @@ export class RateLimiter {
 
     return 0;
   }
-
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
 }
 
 /**
- * Simple delay utility for anti-detection in scraping
+ * Sleep for a fixed number of milliseconds
  */
-export async function delay(minMs: number, maxMs?: number): Promise<void> {
-  const ms = maxMs ? minMs + Math.random() * (maxMs - minMs) : minMs;
+export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Simple delay utility for anti-detection in scraping.
+ * If maxMs is provided, uses a random delay between minMs and maxMs.
+ */
+export function delay(minMs: number, maxMs?: number): Promise<void> {
+  const ms = maxMs ? minMs + Math.random() * (maxMs - minMs) : minMs;
+  return sleep(ms);
 }
