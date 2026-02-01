@@ -1,4 +1,5 @@
 import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
+import { normalizeForComparison } from '../utils/strings.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
 import type { PartialBookData, BookSource } from '../types/book.js';
 
@@ -248,15 +249,15 @@ export class OpenLibrarySource {
   ): OpenLibrarySearchDoc | null {
     if (docs.length === 0) return null;
 
-    const normalizedTitle = this.normalize(title);
-    const normalizedAuthor = author ? this.normalize(author) : null;
+    const normalizedTitle = normalizeForComparison(title);
+    const normalizedAuthor = author ? normalizeForComparison(author) : null;
 
     // Score each document
     const scored = docs.map(doc => {
       let score = 0;
 
       // Title similarity
-      const docTitle = this.normalize(doc.title);
+      const docTitle = normalizeForComparison(doc.title);
       if (docTitle === normalizedTitle) {
         score += 100;
       } else if (docTitle.includes(normalizedTitle) || normalizedTitle.includes(docTitle)) {
@@ -265,7 +266,7 @@ export class OpenLibrarySource {
 
       // Author match
       if (normalizedAuthor && doc.author_name) {
-        const docAuthors = doc.author_name.map(a => this.normalize(a));
+        const docAuthors = doc.author_name.map(a => normalizeForComparison(a));
         if (docAuthors.some(a => a === normalizedAuthor)) {
           score += 80;
         } else if (docAuthors.some(a => a.includes(normalizedAuthor) || normalizedAuthor.includes(a))) {
@@ -291,17 +292,6 @@ export class OpenLibrarySource {
     }
 
     return null;
-  }
-
-  /**
-   * Normalize string for comparison
-   */
-  private normalize(str: string): string {
-    return str
-      .toLowerCase()
-      .replace(/[^\w\s]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
   }
 
   /**

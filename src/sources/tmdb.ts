@@ -476,19 +476,19 @@ export class TMDBSource {
   }
 
   /**
-   * Build seasons array with optional episode details
+   * Build seasons array with optional episode details.
+   * Fetches episode details in parallel for better performance.
    */
   private async buildSeasons(
     tvId: number,
     basicSeasons: TMDBTVDetails['seasons'],
     includeEpisodes: boolean
   ): Promise<Season[]> {
-    const seasons: Season[] = [];
+    // Filter out specials (season 0)
+    const regularSeasons = basicSeasons.filter(s => s.season_number !== 0);
 
-    for (const s of basicSeasons) {
-      // Skip specials (season 0) unless explicitly included
-      if (s.season_number === 0) continue;
-
+    // Build seasons in parallel
+    const seasonPromises = regularSeasons.map(async (s) => {
       let episodes: Episode[] | undefined;
 
       if (includeEpisodes) {
@@ -504,16 +504,16 @@ export class TMDBSource {
         }
       }
 
-      seasons.push({
+      return {
         season_number: s.season_number,
         name: s.name,
         episode_count: s.episode_count,
         air_date: s.air_date,
         episodes,
-      });
-    }
+      };
+    });
 
-    return seasons;
+    return Promise.all(seasonPromises);
   }
 
   /**
