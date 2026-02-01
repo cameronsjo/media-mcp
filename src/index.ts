@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createRequire } from 'module';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -8,6 +9,11 @@ import {
   SetLevelRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
+// Read version from package.json
+const require = createRequire(import.meta.url);
+const { version: packageVersion } = require('../package.json') as { version: string };
 
 import { Logger } from './utils/logger.js';
 import { RateLimiter } from './utils/rate-limiter.js';
@@ -36,17 +42,17 @@ import type { LogLevel } from './types/common.js';
 // Load and validate configuration
 const { config: appConfig, sources: sourceStatus } = loadConfig();
 
-// Server configuration
+// Server configuration (consolidated from appConfig)
 const config = {
   server: {
     name: 'media-metadata-mcp',
-    version: '1.0.0',
+    version: packageVersion,
   },
-  transport: (process.env.MCP_TRANSPORT || 'stdio') as 'stdio' | 'http',
+  transport: appConfig.transport,
   http: {
     port: appConfig.httpPort,
     host: appConfig.httpHost,
-    basePath: process.env.MCP_HTTP_PATH || '/mcp',
+    basePath: appConfig.httpPath,
   },
   apis: {
     tmdb: {
@@ -57,8 +63,8 @@ const config = {
     },
   },
   cache: {
-    enabled: process.env.MCP_CACHE_ENABLED !== 'false',
-    path: process.env.MCP_CACHE_PATH || './cache.db',
+    enabled: appConfig.cacheEnabled,
+    path: appConfig.cachePath,
     defaultTTLHours: Math.floor(appConfig.cacheTtlBooks / 3600),
   } as CacheOptions,
   logging: {
@@ -86,19 +92,39 @@ Options:
   --help, -h           Show this help message
 
 Environment Variables:
-  MCP_TRANSPORT           Transport type (stdio or http)
-  MCP_HTTP_PORT           HTTP server port (default: 3000)
-  MCP_HTTP_HOST           HTTP server host (default: 127.0.0.1)
-  MCP_HTTP_PATH           HTTP endpoint path (default: /mcp)
-  TMDB_API_KEY            TMDB API key (required for movie/TV lookups)
-  GOOGLE_BOOKS_API_KEY    Google Books API key (optional, for enhanced book data)
-  ENABLE_GOODREADS_SCRAPING  Enable Goodreads scraping (default: true)
-  MCP_CACHE_ENABLED       Enable caching (default: true)
-  MCP_CACHE_PATH          SQLite cache database path (default: ./cache.db)
-  CACHE_TTL_BOOKS         Book cache TTL in seconds (default: 604800)
-  LOG_LEVEL               Log level: debug, info, warn, error (default: info)
-  OTEL_ENABLED            Enable OpenTelemetry (default: false)
-  OTEL_EXPORTER_OTLP_ENDPOINT  OpenTelemetry endpoint URL
+  API Keys:
+    TMDB_API_KEY                  TMDB API key (required for movie/TV lookups)
+    GOOGLE_BOOKS_API_KEY          Google Books API key (optional, for enhanced book data)
+
+  Transport:
+    MCP_TRANSPORT                 Transport type: stdio or http (default: stdio)
+    MCP_HTTP_PORT                 HTTP server port (default: 3000)
+    MCP_HTTP_HOST                 HTTP server host (default: 127.0.0.1)
+    MCP_HTTP_PATH                 HTTP endpoint path (default: /mcp)
+
+  Cache:
+    MCP_CACHE_ENABLED             Enable caching (default: true)
+    MCP_CACHE_PATH                SQLite cache database path (default: ./cache.db)
+    MCP_CACHE_TTL_BOOKS           Book cache TTL in seconds (default: 604800)
+    MCP_CACHE_TTL_MOVIES          Movie cache TTL in seconds (default: 86400)
+    MCP_CACHE_TTL_TV              TV cache TTL in seconds (default: 86400)
+
+  Rate Limiting:
+    MCP_RATE_LIMIT_RPM            Requests per minute (default: 30)
+    MCP_RATE_LIMIT_RETRIES        Retry attempts (default: 3)
+
+  Features:
+    MCP_ENABLE_GOODREADS_SCRAPING Enable Goodreads scraping (default: true)
+    MCP_ENABLE_COVER_DOWNLOAD     Enable cover image download (default: false)
+    MCP_COVER_DOWNLOAD_DIR        Cover download directory (default: ./covers)
+
+  Logging:
+    MCP_LOG_LEVEL                 Log level: debug, info, warn, error (default: info)
+
+  OpenTelemetry:
+    OTEL_ENABLED                  Enable OpenTelemetry (default: false)
+    OTEL_EXPORTER_OTLP_ENDPOINT   OpenTelemetry endpoint URL
+    OTEL_SERVICE_NAME             Service name (default: media-metadata-mcp)
 `);
   process.exit(0);
 }
@@ -235,7 +261,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: tools.map((tool) => ({
       name: tool.name,
       description: tool.description,
-      inputSchema: zodToJsonSchema(tool.inputSchema),
+      inputSchema: toMcpInputSchema(tool.inputSchema),
     })),
   };
 });
@@ -348,77 +374,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   return executeToolCall(name, args);
 });
 
-// Convert Zod schema to JSON Schema for MCP
-function zodToJsonSchema(schema: z.ZodType<unknown>): Record<string, unknown> {
-  if ('_def' in schema) {
-    const def = schema._def as {
-      typeName?: string;
-      shape?: () => Record<string, z.ZodType<unknown>>;
-    };
-
-    if (def.typeName === 'ZodObject' && def.shape) {
-      const shape = def.shape();
-      const properties: Record<string, unknown> = {};
-      const required: string[] = [];
-
-      for (const [key, value] of Object.entries(shape)) {
-        const propDef = (
-          value as {
-            _def: {
-              typeName?: string;
-              description?: string;
-              innerType?: { _def: { typeName?: string } };
-              defaultValue?: () => unknown;
-            };
-          }
-        )._def;
-        let propSchema: Record<string, unknown> = {};
-
-        if (propDef.typeName === 'ZodString') {
-          propSchema = { type: 'string' };
-        } else if (propDef.typeName === 'ZodNumber') {
-          propSchema = { type: 'number' };
-        } else if (propDef.typeName === 'ZodBoolean') {
-          propSchema = { type: 'boolean' };
-        } else if (propDef.typeName === 'ZodArray') {
-          propSchema = { type: 'array' };
-        } else if (propDef.typeName === 'ZodOptional') {
-          const innerType = propDef.innerType?._def.typeName;
-          if (innerType === 'ZodString') propSchema = { type: 'string' };
-          else if (innerType === 'ZodNumber') propSchema = { type: 'number' };
-          else if (innerType === 'ZodBoolean') propSchema = { type: 'boolean' };
-          else propSchema = {};
-        } else if (propDef.typeName === 'ZodDefault') {
-          const innerType = propDef.innerType?._def.typeName;
-          if (innerType === 'ZodBoolean')
-            propSchema = { type: 'boolean', default: propDef.defaultValue?.() };
-          else if (innerType === 'ZodNumber')
-            propSchema = { type: 'number', default: propDef.defaultValue?.() };
-          else propSchema = { default: propDef.defaultValue?.() };
-        } else {
-          propSchema = {};
-        }
-
-        if (propDef.description) {
-          propSchema.description = propDef.description;
-        }
-
-        properties[key] = propSchema;
-
-        if (propDef.typeName !== 'ZodOptional' && propDef.typeName !== 'ZodDefault') {
-          required.push(key);
-        }
-      }
-
-      return {
-        type: 'object',
-        properties,
-        required: required.length > 0 ? required : undefined,
-      };
-    }
-  }
-
-  return { type: 'object' };
+/**
+ * Convert Zod schema to JSON Schema for MCP tool registration.
+ * Uses zod-to-json-schema library for robust conversion.
+ */
+function toMcpInputSchema(schema: z.ZodType<unknown>): Record<string, unknown> {
+  const jsonSchema = zodToJsonSchema(schema, {
+    $refStrategy: 'none', // Inline all definitions for MCP compatibility
+  });
+  // Remove $schema property as MCP doesn't need it
+  const { $schema: _, ...schemaWithoutMeta } = jsonSchema as Record<string, unknown>;
+  return schemaWithoutMeta;
 }
 
 // Start the server
@@ -475,7 +441,7 @@ async function main() {
               tools: tools.map((tool) => ({
                 name: tool.name,
                 description: tool.description,
-                inputSchema: zodToJsonSchema(tool.inputSchema),
+                inputSchema: toMcpInputSchema(tool.inputSchema),
               })),
             },
           };
@@ -561,8 +527,30 @@ async function shutdown() {
   process.exit(0);
 }
 
+// Graceful shutdown on signals
 process.on('SIGINT', () => void shutdown());
 process.on('SIGTERM', () => void shutdown());
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason: unknown) => {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  const stack = reason instanceof Error ? reason.stack : undefined;
+  logger.error('main', {
+    action: 'unhandled_rejection',
+    message,
+    stack,
+  });
+});
+
+// Handle uncaught exceptions - log and exit
+process.on('uncaughtException', (error: Error) => {
+  logger.error('main', {
+    action: 'uncaught_exception',
+    message: error.message,
+    stack: error.stack,
+  });
+  void shutdown();
+});
 
 main().catch((error) => {
   console.error('Fatal error:', error);

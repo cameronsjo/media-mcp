@@ -2,25 +2,32 @@ import { z } from 'zod';
 
 /**
  * Environment configuration schema with validation
+ *
+ * All environment variables use the MCP_ prefix for app-specific settings.
+ * Standard variables (TMDB_API_KEY, GOOGLE_BOOKS_API_KEY, OTEL_*) retain their
+ * conventional names for interoperability with external tools.
  */
 export const ConfigSchema = z.object({
-  // API Keys
+  // API Keys (standard names for interoperability)
   tmdbApiKey: z.string().optional(),
   googleBooksApiKey: z.string().optional(),
 
+  // Transport settings
+  transport: z.enum(['stdio', 'http']).default('stdio'),
+  httpPort: z.number().default(3000),
+  httpHost: z.string().default('127.0.0.1'),
+  httpPath: z.string().default('/mcp'),
+
   // Cache settings
-  cacheDir: z.string().default('./cache'),
-  cacheTtlBooks: z.number().default(86400 * 7), // 7 days
-  cacheTtlMovies: z.number().default(86400), // 1 day
-  cacheTtlTv: z.number().default(86400), // 1 day
+  cacheEnabled: z.boolean().default(true),
+  cachePath: z.string().default('./cache.db'),
+  cacheTtlBooks: z.number().default(86400 * 7), // 7 days in seconds
+  cacheTtlMovies: z.number().default(86400), // 1 day in seconds
+  cacheTtlTv: z.number().default(86400), // 1 day in seconds
 
   // Rate limiting
   rateLimitRequestsPerMinute: z.number().default(30),
   rateLimitRetryAttempts: z.number().default(3),
-
-  // Transport settings
-  httpPort: z.number().default(3000),
-  httpHost: z.string().default('localhost'),
 
   // Feature flags
   enableGoodreadsScraping: z.boolean().default(true),
@@ -30,7 +37,7 @@ export const ConfigSchema = z.object({
   // Logging
   logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 
-  // OpenTelemetry
+  // OpenTelemetry (standard OTEL_ prefix for interoperability)
   otelEnabled: z.boolean().default(false),
   otelEndpoint: z.string().optional(),
   otelServiceName: z.string().default('media-metadata-mcp'),
@@ -52,28 +59,46 @@ export interface SourceStatus {
  */
 export function loadConfig(): { config: Config; sources: SourceStatus[] } {
   const rawConfig = {
+    // API Keys (standard names for interoperability)
     tmdbApiKey: process.env.TMDB_API_KEY,
     googleBooksApiKey: process.env.GOOGLE_BOOKS_API_KEY,
-    cacheDir: process.env.CACHE_DIR,
-    cacheTtlBooks: process.env.CACHE_TTL_BOOKS
-      ? parseInt(process.env.CACHE_TTL_BOOKS, 10)
+
+    // Transport settings (MCP_ prefix)
+    transport: process.env.MCP_TRANSPORT as Config['transport'] | undefined,
+    httpPort: process.env.MCP_HTTP_PORT ? parseInt(process.env.MCP_HTTP_PORT, 10) : undefined,
+    httpHost: process.env.MCP_HTTP_HOST,
+    httpPath: process.env.MCP_HTTP_PATH,
+
+    // Cache settings (MCP_ prefix)
+    cacheEnabled: process.env.MCP_CACHE_ENABLED !== 'false',
+    cachePath: process.env.MCP_CACHE_PATH,
+    cacheTtlBooks: process.env.MCP_CACHE_TTL_BOOKS
+      ? parseInt(process.env.MCP_CACHE_TTL_BOOKS, 10)
       : undefined,
-    cacheTtlMovies: process.env.CACHE_TTL_MOVIES
-      ? parseInt(process.env.CACHE_TTL_MOVIES, 10)
+    cacheTtlMovies: process.env.MCP_CACHE_TTL_MOVIES
+      ? parseInt(process.env.MCP_CACHE_TTL_MOVIES, 10)
       : undefined,
-    cacheTtlTv: process.env.CACHE_TTL_TV ? parseInt(process.env.CACHE_TTL_TV, 10) : undefined,
-    rateLimitRequestsPerMinute: process.env.RATE_LIMIT_RPM
-      ? parseInt(process.env.RATE_LIMIT_RPM, 10)
+    cacheTtlTv: process.env.MCP_CACHE_TTL_TV
+      ? parseInt(process.env.MCP_CACHE_TTL_TV, 10)
       : undefined,
-    rateLimitRetryAttempts: process.env.RATE_LIMIT_RETRIES
-      ? parseInt(process.env.RATE_LIMIT_RETRIES, 10)
+
+    // Rate limiting (MCP_ prefix)
+    rateLimitRequestsPerMinute: process.env.MCP_RATE_LIMIT_RPM
+      ? parseInt(process.env.MCP_RATE_LIMIT_RPM, 10)
       : undefined,
-    httpPort: process.env.HTTP_PORT ? parseInt(process.env.HTTP_PORT, 10) : undefined,
-    httpHost: process.env.HTTP_HOST,
-    enableGoodreadsScraping: process.env.ENABLE_GOODREADS_SCRAPING !== 'false',
-    enableCoverDownload: process.env.ENABLE_COVER_DOWNLOAD === 'true',
-    coverDownloadDir: process.env.COVER_DOWNLOAD_DIR,
-    logLevel: process.env.LOG_LEVEL as Config['logLevel'] | undefined,
+    rateLimitRetryAttempts: process.env.MCP_RATE_LIMIT_RETRIES
+      ? parseInt(process.env.MCP_RATE_LIMIT_RETRIES, 10)
+      : undefined,
+
+    // Feature flags (MCP_ prefix)
+    enableGoodreadsScraping: process.env.MCP_ENABLE_GOODREADS_SCRAPING !== 'false',
+    enableCoverDownload: process.env.MCP_ENABLE_COVER_DOWNLOAD === 'true',
+    coverDownloadDir: process.env.MCP_COVER_DOWNLOAD_DIR,
+
+    // Logging (MCP_ prefix)
+    logLevel: process.env.MCP_LOG_LEVEL as Config['logLevel'] | undefined,
+
+    // OpenTelemetry (standard OTEL_ prefix for interoperability)
     otelEnabled: process.env.OTEL_ENABLED === 'true',
     otelEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
     otelServiceName: process.env.OTEL_SERVICE_NAME,

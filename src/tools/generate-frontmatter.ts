@@ -217,7 +217,10 @@ export class GenerateFrontmatterTool {
     tv: TVResult,
     template: string
   ): Record<string, unknown> {
-    const year = new Date(tv.first_air_date).getFullYear();
+    const parsedDate = tv.first_air_date ? new Date(tv.first_air_date) : null;
+    const year = parsedDate && !isNaN(parsedDate.getTime())
+      ? parsedDate.getFullYear()
+      : undefined;
 
     const minimal: Record<string, unknown> = {
       title: tv.title,

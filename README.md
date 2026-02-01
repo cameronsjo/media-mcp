@@ -21,19 +21,62 @@ npm run build
 
 ## Configuration
 
-The server is configured via environment variables:
+The server is configured via environment variables. App-specific variables use the `MCP_` prefix; standard API/telemetry variables use their conventional names.
+
+### API Keys
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `TMDB_API_KEY` | TMDB API key (required for movie/TV lookups) | - |
+| `GOOGLE_BOOKS_API_KEY` | Google Books API key (optional, for enhanced book data) | - |
+
+### Transport
+
+| Variable | Description | Default |
+|----------|-------------|---------|
 | `MCP_TRANSPORT` | Transport type: `stdio` or `http` | `stdio` |
 | `MCP_HTTP_PORT` | HTTP server port | `3000` |
 | `MCP_HTTP_HOST` | HTTP server host | `127.0.0.1` |
 | `MCP_HTTP_PATH` | HTTP endpoint path | `/mcp` |
+
+### Cache
+
+| Variable | Description | Default |
+|----------|-------------|---------|
 | `MCP_CACHE_ENABLED` | Enable caching | `true` |
 | `MCP_CACHE_PATH` | SQLite cache database path | `./cache.db` |
-| `MCP_CACHE_TTL_HOURS` | Default cache TTL in hours | `168` |
-| `MCP_LOG_LEVEL` | Log level: debug, info, warning, error | `info` |
+| `MCP_CACHE_TTL_BOOKS` | Book cache TTL in seconds | `604800` (7 days) |
+| `MCP_CACHE_TTL_MOVIES` | Movie cache TTL in seconds | `86400` (1 day) |
+| `MCP_CACHE_TTL_TV` | TV cache TTL in seconds | `86400` (1 day) |
+
+### Rate Limiting
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MCP_RATE_LIMIT_RPM` | Requests per minute | `30` |
+| `MCP_RATE_LIMIT_RETRIES` | Retry attempts | `3` |
+
+### Features
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MCP_ENABLE_GOODREADS_SCRAPING` | Enable Goodreads scraping | `true` |
+| `MCP_ENABLE_COVER_DOWNLOAD` | Enable cover image download | `false` |
+| `MCP_COVER_DOWNLOAD_DIR` | Cover download directory | `./covers` |
+
+### Logging
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MCP_LOG_LEVEL` | Log level: `debug`, `info`, `warn`, `error` | `info` |
+
+### OpenTelemetry
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OTEL_ENABLED` | Enable OpenTelemetry | `false` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry endpoint URL | - |
+| `OTEL_SERVICE_NAME` | Service name | `media-metadata-mcp` |
 
 ### Getting API Keys
 
@@ -227,22 +270,19 @@ media-metadata-mcp/
 │   │   └── generate-frontmatter.ts
 │   ├── sources/
 │   │   ├── open-library.ts
+│   │   ├── google-books.ts
+│   │   ├── goodreads.ts
 │   │   └── tmdb.ts
 │   ├── cache/
 │   │   └── sqlite-cache.ts
 │   ├── transport/
 │   │   └── http-transport.ts
-│   ├── utils/
-│   │   ├── logger.ts
-│   │   ├── rate-limiter.ts
-│   │   └── http-client.ts
-│   └── types/
-│       ├── book.ts
-│       ├── movie.ts
-│       ├── tv.ts
-│       └── common.ts
-├── config/
-│   └── default.json
+│   └── utils/
+│       ├── config.ts
+│       ├── logger.ts
+│       ├── rate-limiter.ts
+│       └── http-client.ts
+├── tests/
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -253,7 +293,11 @@ media-metadata-mcp/
 | Source | Auth | Used For |
 |--------|------|----------|
 | Open Library | None | Book metadata, ISBNs, covers |
+| Google Books | API Key (optional) | Book descriptions, metadata enrichment |
+| Goodreads | None (scraping) | Ratings, series info, genres, tropes |
 | TMDB | API Key | Movies, TV shows, cast, watch providers |
+
+Book lookups merge results from all available sources to provide the most complete metadata.
 
 ## Caching
 

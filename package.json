@@ -35,8 +35,16 @@
     "movies",
     "tv-shows"
   ],
-  "author": "",
+  "author": "Cameron Sjo <cameronsjo@users.noreply.github.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cameronsjo/media-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cameronsjo/media-mcp/issues"
+  },
+  "homepage": "https://github.com/cameronsjo/media-mcp#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@opentelemetry/api": "^1.9.0",
@@ -51,7 +59,8 @@
     "express": "^4.21.2",
     "undici": "^7.1.0",
     "uuid": "^11.0.3",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.16.0",
@@ -59,7 +68,6 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.1",
     "@types/uuid": "^10.0.0",
-    "typescript-eslint": "^8.18.0",
     "@vitest/coverage-v8": "^2.1.8",
     "eslint": "^9.16.0",
     "eslint-config-prettier": "^9.1.0",
@@ -68,6 +76,7 @@
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
     "vitest": "^2.1.8"
   },
   "engines": {

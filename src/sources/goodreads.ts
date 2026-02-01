@@ -420,7 +420,7 @@ export class GoodreadsSource {
       'billionaireromance',
       'smalltown',
       'smalltownromance',
-      'hockyromance',
+      'hockeyromance',
       'sportsromance',
       'rockstarromance',
       'militaryromance',
