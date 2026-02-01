@@ -1,4 +1,5 @@
 import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
+import { normalizeForComparison } from '../utils/strings.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
 import type { MovieResult, CastMember, MovieCollection } from '../types/movie.js';
 import type { TVResult, Season, Episode, TVStatus } from '../types/tv.js';
@@ -632,13 +633,13 @@ export class TMDBSource {
   ): TMDBSearchResult | null {
     if (results.length === 0) return null;
 
-    const normalizedTitle = this.normalize(title);
+    const normalizedTitle = normalizeForComparison(title);
 
     const scored = results.map(r => {
       let score = 0;
 
       // Title match
-      const resultTitle = this.normalize(r.title || '');
+      const resultTitle = normalizeForComparison(r.title || '');
       if (resultTitle === normalizedTitle) {
         score += 100;
       } else if (resultTitle.includes(normalizedTitle)) {
@@ -676,13 +677,13 @@ export class TMDBSource {
   ): TMDBSearchResult | null {
     if (results.length === 0) return null;
 
-    const normalizedTitle = this.normalize(title);
+    const normalizedTitle = normalizeForComparison(title);
 
     const scored = results.map(r => {
       let score = 0;
 
       // Title match
-      const resultTitle = this.normalize(r.name || '');
+      const resultTitle = normalizeForComparison(r.name || '');
       if (resultTitle === normalizedTitle) {
         score += 100;
       } else if (resultTitle.includes(normalizedTitle)) {
@@ -708,16 +709,5 @@ export class TMDBSource {
     scored.sort((a, b) => b.score - a.score);
 
     return scored[0].score >= 50 ? scored[0].result : null;
-  }
-
-  /**
-   * Normalize string for comparison
-   */
-  private normalize(str: string): string {
-    return str
-      .toLowerCase()
-      .replace(/[^\w\s]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
   }
 }

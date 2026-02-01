@@ -12,7 +12,7 @@ export const LookupBookInputSchema = z.object({
   author: z.string().optional().describe('Author name (recommended for better matching)'),
   isbn: z.string().optional().describe('ISBN-10 or ISBN-13 (preferred if available)'),
   sources: z
-    .array(z.enum(['open_library', 'google_books', 'goodreads', 'hardcover']))
+    .array(z.enum(['open_library', 'google_books', 'goodreads']))
     .optional()
     .describe('Sources to query (defaults to all available)'),
 });

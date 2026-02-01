@@ -153,37 +153,3 @@ export function getSourceStatusMessage(sources: SourceStatus[]): string {
 
   return message;
 }
-
-/**
- * Validate that required sources are available for a given media type
- */
-export function validateSourcesForMediaType(
-  mediaType: 'book' | 'movie' | 'tv',
-  sources: SourceStatus[]
-): { valid: boolean; warnings: string[] } {
-  const warnings: string[] = [];
-
-  if (mediaType === 'book') {
-    const bookSources = sources.filter(
-      (s) => ['OpenLibrary', 'GoogleBooks', 'Goodreads'].includes(s.name) && s.available
-    );
-    if (bookSources.length === 0) {
-      return { valid: false, warnings: ['No book sources available'] };
-    }
-    if (!sources.find((s) => s.name === 'GoogleBooks')?.available) {
-      warnings.push('Google Books unavailable - results may be less comprehensive');
-    }
-  }
-
-  if (mediaType === 'movie' || mediaType === 'tv') {
-    const tmdb = sources.find((s) => s.name === 'TMDB');
-    if (!tmdb?.available) {
-      return {
-        valid: false,
-        warnings: ['TMDB_API_KEY required for movie/TV lookups'],
-      };
-    }
-  }
-
-  return { valid: true, warnings };
-}

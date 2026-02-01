@@ -6,7 +6,6 @@ export const BookSourceSchema = z.enum([
   'open_library',
   'google_books',
   'goodreads',
-  'hardcover',
 ]);
 export type BookSource = z.infer<typeof BookSourceSchema>;
 
@@ -23,7 +22,6 @@ export const BookIdentifiersSchema = z.object({
   open_library: z.string().nullable(),
   goodreads: z.string().nullable(),
   google_books: z.string().nullable(),
-  hardcover: z.string().nullable(),
 });
 export type BookIdentifiers = z.infer<typeof BookIdentifiersSchema>;
 

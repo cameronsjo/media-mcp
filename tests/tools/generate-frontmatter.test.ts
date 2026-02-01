@@ -39,7 +39,6 @@ describe('GenerateFrontmatterTool', () => {
       open_library: 'OL5732753W',
       goodreads: '186074',
       google_books: null,
-      hardcover: null,
     },
     source_urls: {
       goodreads: 'https://www.goodreads.com/book/show/186074',

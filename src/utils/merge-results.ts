@@ -5,10 +5,9 @@ import type { ConfidenceLevel } from '../types/common.js';
  * Source priority for field selection (higher = more trusted)
  */
 const SOURCE_PRIORITY: Record<BookSource, number> = {
-  goodreads: 4,
-  open_library: 3,
-  google_books: 2,
-  hardcover: 1,
+  goodreads: 3,
+  open_library: 2,
+  google_books: 1,
 };
 
 /**
@@ -17,7 +16,7 @@ const SOURCE_PRIORITY: Record<BookSource, number> = {
 const FIELD_SOURCE_PREFERENCE: Partial<Record<keyof PartialBookData, BookSource[]>> = {
   rating: ['goodreads', 'open_library', 'google_books'],
   genres: ['goodreads', 'google_books', 'open_library'],
-  series: ['goodreads', 'hardcover', 'open_library'],
+  series: ['goodreads', 'open_library'],
   description: ['google_books', 'open_library', 'goodreads'],
   cover_url: ['open_library', 'google_books', 'goodreads'],
   page_count: ['open_library', 'google_books', 'goodreads'],
@@ -69,7 +68,6 @@ export function mergeBookResults(
       open_library: findIdentifier(results, 'open_library'),
       goodreads: findIdentifier(results, 'goodreads'),
       google_books: findIdentifier(results, 'google_books'),
-      hardcover: findIdentifier(results, 'hardcover'),
     },
     source_urls: {
       open_library: findSourceUrl(results, 'open_library'),
