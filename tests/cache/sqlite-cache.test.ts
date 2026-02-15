@@ -181,6 +181,51 @@ describe('SQLiteCache', () => {
     });
   });
 
+  describe('widgetStats', () => {
+    it('should return widget-compatible stats', () => {
+      cache.set('test:1', { data: 1 }, 'source1');
+      cache.set('test:2', { data: 2 }, 'source1');
+      cache.set('test:3', { data: 3 }, 'source2');
+
+      // Generate some hits
+      cache.get('test:1');
+      cache.get('test:1');
+      cache.get('test:2');
+
+      const stats = cache.widgetStats();
+
+      // 3 entries (misses) + 3 hits = 6 total lookups
+      expect(stats.lookups_total).toBe(6);
+      // 3 hits / 6 total = 50%
+      expect(stats.cache_hit_pct).toBe(50);
+      // DB file should have non-zero size
+      expect(stats.cache_size_bytes).toBeGreaterThan(0);
+    });
+
+    it('should return zeros when cache is empty', () => {
+      const stats = cache.widgetStats();
+
+      expect(stats.lookups_total).toBe(0);
+      expect(stats.cache_hit_pct).toBe(0);
+      // DB file exists but may be small
+      expect(stats.cache_size_bytes).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should return zeros when cache is disabled', () => {
+      const disabledCache = new SQLiteCache(
+        { path: ':memory:', defaultTTLHours: 24, enabled: false },
+        logger
+      );
+
+      const stats = disabledCache.widgetStats();
+
+      expect(stats.lookups_total).toBe(0);
+      expect(stats.cache_hit_pct).toBe(0);
+      expect(stats.cache_size_bytes).toBe(0);
+      disabledCache.close();
+    });
+  });
+
   describe('disabled cache', () => {
     it('should not store values when disabled', () => {
       const disabledCache = new SQLiteCache(

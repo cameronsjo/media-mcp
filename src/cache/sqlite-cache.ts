@@ -1,3 +1,4 @@
+import { statSync } from 'fs';
 import Database from 'better-sqlite3';
 import { Logger } from '../utils/logger.js';
 
@@ -236,6 +237,38 @@ export class SQLiteCache {
       bySource,
       hitRate: hits.total ? hits.total / (hits.total + total.count) : 0,
     };
+  }
+
+  /**
+   * Lightweight stats for the Homepage dashboard widget.
+   * Returns flat JSON compatible with Homepage's customapi widget.
+   */
+  widgetStats(): { lookups_total: number; cache_hit_pct: number; cache_size_bytes: number } {
+    if (!this.enabled) {
+      return { lookups_total: 0, cache_hit_pct: 0, cache_size_bytes: 0 };
+    }
+
+    const hits = this.db.prepare('SELECT COALESCE(SUM(hit_count), 0) as total FROM cache')
+      .get() as { total: number };
+    const entries = this.db.prepare('SELECT COUNT(*) as count FROM cache')
+      .get() as { count: number };
+
+    const lookups_total = hits.total + entries.count;
+    const cache_hit_pct = lookups_total > 0
+      ? Math.round((hits.total / lookups_total) * 1000) / 10
+      : 0;
+
+    let cache_size_bytes = 0;
+    const dbPath = this.db.name;
+    if (dbPath && dbPath !== ':memory:' && dbPath !== '') {
+      try {
+        cache_size_bytes = statSync(dbPath).size;
+      } catch {
+        // DB file may not exist yet or be inaccessible
+      }
+    }
+
+    return { lookups_total, cache_hit_pct, cache_size_bytes };
   }
 
   /**

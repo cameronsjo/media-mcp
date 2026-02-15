@@ -502,6 +502,17 @@ async function main() {
       }
     });
 
+    // Homepage dashboard widget endpoint (flat JSON for customapi widget)
+    httpTransport.getApp().get('/api/widget', (_req, res) => {
+      const stats = cache.widgetStats();
+      res.json({
+        lookups_total: stats.lookups_total,
+        cache_hit_pct: stats.cache_hit_pct,
+        cache_size_bytes: stats.cache_size_bytes,
+        uptime_seconds: Math.floor(process.uptime()),
+      });
+    });
+
     await httpTransport.start();
 
     console.error(

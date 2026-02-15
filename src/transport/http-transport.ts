@@ -239,6 +239,11 @@ export class StreamableHTTPTransport {
     }, 5 * 60 * 1000);
   }
 
+  /** Expose the Express app for registering additional operational routes (e.g. /api/widget) */
+  getApp(): Express {
+    return this.app;
+  }
+
   setRequestHandler(handler: RequestHandler): void {
     this.requestHandler = handler;
   }
