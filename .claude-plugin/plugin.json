@@ -1,0 +1,7 @@
+{
+  "name": "media-mcp",
+  "description": "MCP server enriching Obsidian vaults with book, movie, and TV metadata",
+  "author": {
+    "name": "cameronsjo"
+  }
+}

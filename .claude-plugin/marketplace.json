@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "media-mcp",
+  "owner": {
+    "name": "Cameron Sjo",
+    "github": "cameronsjo"
+  },
+  "plugins": [
+    {
+      "name": "media-mcp",
+      "source": "./.claude-plugin",
+      "description": "MCP server enriching Obsidian vaults with book, movie, and TV metadata"
+    }
+  ]
+}
