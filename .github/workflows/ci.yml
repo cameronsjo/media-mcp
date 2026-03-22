@@ -2,11 +2,32 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
 
 jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
   test:
     runs-on: ubuntu-latest
 
@@ -21,25 +42,53 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
+      - name: Build
+        run: npm run build
 
-      - name: Type check
-        run: npm run typecheck
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage reports
+        if: matrix.node-version == '20.x'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage/coverage-final.json
+          flags: unittests
+        continue-on-error: true
+
+  integration-tests:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Build
         run: npm run build
 
-      - name: Test
-        run: npm test
+      - name: Run integration tests
+        run: npm run test:integration
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        continue-on-error: true
 
   release:
-    needs: test
+    needs: [lint-and-typecheck, test]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
@@ -50,7 +99,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20.x
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -61,5 +110,5 @@ jobs:
       - name: Create release artifact
         run: |
           mkdir -p release
-          cp -r dist package.json README.md LICENSE* release/ 2>/dev/null || true
+          cp -r dist package.json README.md LICENSE release/
           cd release && npm pack
