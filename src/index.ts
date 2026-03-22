@@ -115,9 +115,6 @@ Environment Variables:
 
   Features:
     MCP_ENABLE_GOODREADS_SCRAPING Enable Goodreads scraping (default: true)
-    MCP_ENABLE_COVER_DOWNLOAD     Enable cover image download (default: false)
-    MCP_COVER_DOWNLOAD_DIR        Cover download directory (default: ./covers)
-
   Logging:
     MCP_LOG_LEVEL                 Log level: debug, info, warn, error (default: info)
 
@@ -514,6 +511,7 @@ async function main() {
     });
 
     await httpTransport.start();
+    stopTransport = () => httpTransport.stop();
 
     console.error(
       `Media Metadata MCP Server running on http://${config.http.host}:${config.http.port}${config.http.basePath}`
@@ -530,9 +528,12 @@ async function main() {
   }
 }
 
+let stopTransport: (() => Promise<void>) | undefined;
+
 // Handle shutdown
 async function shutdown() {
   logger.info('main', { action: 'shutting_down' });
+  await stopTransport?.();
   cache.close();
   await shutdownTelemetry();
   process.exit(0);
