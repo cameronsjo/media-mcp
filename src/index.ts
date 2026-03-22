@@ -380,6 +380,7 @@ function toMcpInputSchema(schema: z.ZodType<unknown>): Record<string, unknown> {
     $refStrategy: 'none', // Inline all definitions for MCP compatibility
   });
   // Remove $schema property as MCP doesn't need it
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { $schema: _, ...schemaWithoutMeta } = jsonSchema as Record<string, unknown>;
   return schemaWithoutMeta;
 }
