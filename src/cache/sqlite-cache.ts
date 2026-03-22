@@ -1,4 +1,4 @@
-import { statSync } from 'fs';
+import { statSync, unlinkSync } from 'node:fs';
 import Database from 'better-sqlite3';
 import { Logger } from '../utils/logger.js';
 
@@ -44,7 +44,27 @@ export class SQLiteCache {
       return;
     }
 
-    this.db = new Database(options.path);
+    try {
+      this.db = new Database(options.path);
+    } catch (error) {
+      this.logger.error('cache', {
+        action: 'open_failed',
+        path: options.path,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      for (const suffix of ['', '-wal', '-shm']) {
+        try {
+          unlinkSync(options.path + suffix);
+        } catch {
+          // File may not exist
+        }
+      }
+
+      this.logger.info('cache', { action: 'recovery_attempt', path: options.path });
+      this.db = new Database(options.path);
+    }
+
     this.initialize();
   }
 
@@ -117,7 +137,7 @@ export class SQLiteCache {
         hit_count: row.hit_count + 1,
       };
     } catch {
-      this.logger.warning('cache', { action: 'parse_error', key });
+      this.logger.error('cache', { action: 'parse_error', key });
       this.delete(key);
       return null;
     }
@@ -275,7 +295,15 @@ export class SQLiteCache {
    * Close the database connection
    */
   close(): void {
-    this.db.close();
+    try {
+      this.db.close();
+    } catch (error) {
+      this.logger.error('cache', {
+        action: 'close_failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
     this.logger.info('cache', { action: 'closed' });
   }
 }
