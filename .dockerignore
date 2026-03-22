@@ -42,6 +42,10 @@ docs/
 # CI/CD
 .github/
 
+# Build/deploy config (not needed in image)
+docker-compose*
+Makefile
+
 # Misc
 *.tgz
 *.tar.gz
