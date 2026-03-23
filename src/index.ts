@@ -534,7 +534,14 @@ let stopTransport: (() => Promise<void>) | undefined;
 // Handle shutdown
 async function shutdown() {
   logger.info('main', { action: 'shutting_down' });
-  await stopTransport?.();
+  try {
+    await stopTransport?.();
+  } catch (error) {
+    logger.error('main', {
+      action: 'transport_stop_failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
   cache.close();
   await shutdownTelemetry();
   process.exit(0);
