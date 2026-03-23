@@ -6,6 +6,7 @@ export const BookSourceSchema = z.enum([
   'open_library',
   'google_books',
   'goodreads',
+  'hardcover',
 ]);
 export type BookSource = z.infer<typeof BookSourceSchema>;
 
@@ -22,6 +23,7 @@ export const BookIdentifiersSchema = z.object({
   open_library: z.string().nullable(),
   goodreads: z.string().nullable(),
   google_books: z.string().nullable(),
+  hardcover: z.string().nullable(),
 });
 export type BookIdentifiers = z.infer<typeof BookIdentifiersSchema>;
 
@@ -30,6 +32,7 @@ export const BookRatingsSchema = z.object({
   goodreads: RatingSchema.optional(),
   open_library: RatingSchema.optional(),
   google_books: RatingSchema.optional(),
+  hardcover: RatingSchema.optional(),
 });
 export type BookRatings = z.infer<typeof BookRatingsSchema>;
 
@@ -38,6 +41,7 @@ export const BookSourceUrlsSchema = z.object({
   goodreads: z.string().url().nullable(),
   open_library: z.string().url().nullable(),
   google_books: z.string().url().nullable(),
+  hardcover: z.string().url().nullable(),
 });
 export type BookSourceUrls = z.infer<typeof BookSourceUrlsSchema>;
 

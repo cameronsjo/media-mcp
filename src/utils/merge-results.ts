@@ -5,6 +5,7 @@ import type { ConfidenceLevel } from '../types/common.js';
  * Source priority for field selection (higher = more trusted)
  */
 const SOURCE_PRIORITY: Record<BookSource, number> = {
+  hardcover: 4,
   goodreads: 3,
   open_library: 2,
   google_books: 1,
@@ -14,16 +15,16 @@ const SOURCE_PRIORITY: Record<BookSource, number> = {
  * Field-specific source preferences
  */
 const FIELD_SOURCE_PREFERENCE: Partial<Record<keyof PartialBookData, BookSource[]>> = {
-  rating: ['goodreads', 'open_library', 'google_books'],
-  genres: ['goodreads', 'google_books', 'open_library'],
-  series: ['goodreads', 'open_library'],
-  description: ['google_books', 'open_library', 'goodreads'],
-  cover_url: ['open_library', 'google_books', 'goodreads'],
-  page_count: ['open_library', 'google_books', 'goodreads'],
-  isbn_10: ['open_library', 'google_books'],
-  isbn_13: ['open_library', 'google_books'],
-  tropes: ['goodreads'],
-  shelves: ['goodreads'],
+  rating: ['hardcover', 'goodreads', 'open_library', 'google_books'],
+  genres: ['hardcover', 'goodreads', 'google_books', 'open_library'],
+  series: ['hardcover', 'goodreads', 'open_library'],
+  description: ['google_books', 'hardcover', 'open_library', 'goodreads'],
+  cover_url: ['open_library', 'google_books', 'hardcover', 'goodreads'],
+  page_count: ['open_library', 'hardcover', 'google_books', 'goodreads'],
+  isbn_10: ['open_library', 'google_books', 'hardcover'],
+  isbn_13: ['open_library', 'google_books', 'hardcover'],
+  tropes: ['hardcover', 'goodreads'],
+  shelves: ['hardcover', 'goodreads'],
 };
 
 /**
@@ -68,11 +69,13 @@ export function mergeBookResults(
       open_library: findIdentifier(results, 'open_library'),
       goodreads: findIdentifier(results, 'goodreads'),
       google_books: findIdentifier(results, 'google_books'),
+      hardcover: findIdentifier(results, 'hardcover'),
     },
     source_urls: {
       open_library: findSourceUrl(results, 'open_library'),
       goodreads: findSourceUrl(results, 'goodreads'),
       google_books: findSourceUrl(results, 'google_books'),
+      hardcover: findSourceUrl(results, 'hardcover'),
     },
     _meta: {
       sources_queried: sourcesQueried,
@@ -232,6 +235,9 @@ function mergeRatings(results: PartialBookData[]): BookResult['ratings'] {
           break;
         case 'google_books':
           ratings.google_books = result.rating;
+          break;
+        case 'hardcover':
+          ratings.hardcover = result.rating;
           break;
       }
     }

@@ -282,7 +282,10 @@ export class TMDBSource {
       const result: MovieResult = {
         title: details.title,
         original_title: details.original_title,
-        year: new Date(details.release_date).getFullYear(),
+        year: (() => {
+          const y = details.release_date ? new Date(details.release_date).getFullYear() : NaN;
+          return isNaN(y) ? 0 : y;
+        })(),
         release_date: details.release_date,
         runtime_minutes: details.runtime || 0,
         genres: details.genres.map(g => g.name),
@@ -649,10 +652,12 @@ export class TMDBSource {
       // Year match
       if (year && r.release_date) {
         const resultYear = new Date(r.release_date).getFullYear();
-        if (resultYear === year) {
-          score += 50;
-        } else if (Math.abs(resultYear - year) <= 1) {
-          score += 25;
+        if (!isNaN(resultYear)) {
+          if (resultYear === year) {
+            score += 50;
+          } else if (Math.abs(resultYear - year) <= 1) {
+            score += 25;
+          }
         }
       }
 
@@ -693,10 +698,12 @@ export class TMDBSource {
       // Year match
       if (year && r.first_air_date) {
         const resultYear = new Date(r.first_air_date).getFullYear();
-        if (resultYear === year) {
-          score += 50;
-        } else if (Math.abs(resultYear - year) <= 1) {
-          score += 25;
+        if (!isNaN(resultYear)) {
+          if (resultYear === year) {
+            score += 50;
+          } else if (Math.abs(resultYear - year) <= 1) {
+            score += 25;
+          }
         }
       }
 

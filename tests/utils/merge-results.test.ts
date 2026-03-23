@@ -216,7 +216,6 @@ describe('mergeBookResults', () => {
 
   describe('description selection', () => {
     it('prefers Google Books description when available and long enough', () => {
-      const shortDesc = 'Short desc';
       const longDesc = 'A'.repeat(150); // > 100 chars
 
       const result = mergeBookResults(

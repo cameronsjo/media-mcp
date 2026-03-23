@@ -31,6 +31,10 @@ RUN npm prune --omit=dev
 # Production stage
 FROM node:20-slim AS production
 
+LABEL org.opencontainers.image.source="https://github.com/cameronsjo/media-mcp" \
+      org.opencontainers.image.description="MCP server for enriching book, movie, and TV show metadata" \
+      org.opencontainers.image.licenses="MIT"
+
 # Install wget for health checks
 RUN apt-get update && apt-get install -y wget && rm -rf /var/lib/apt/lists/*
 

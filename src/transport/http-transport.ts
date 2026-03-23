@@ -1,3 +1,4 @@
+import type http from 'node:http';
 import express, { type Express, type Request, type Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { Logger } from '../utils/logger.js';
@@ -41,6 +42,7 @@ interface Session {
  */
 export class StreamableHTTPTransport {
   private app: Express;
+  private server: http.Server | null = null;
   private sessions: Map<string, Session> = new Map();
   private requestHandler: RequestHandler | null = null;
   private logger: Logger;
@@ -250,13 +252,26 @@ export class StreamableHTTPTransport {
 
   async start(): Promise<void> {
     return new Promise((resolve) => {
-      this.app.listen(this.options.port, this.options.host, () => {
+      this.server = this.app.listen(this.options.port, this.options.host, () => {
         this.logger.info('http-transport', {
           action: 'started',
           host: this.options.host,
           port: this.options.port,
           endpoint: this.options.basePath,
         });
+        resolve();
+      });
+    });
+  }
+
+  async stop(): Promise<void> {
+    return new Promise((resolve) => {
+      if (!this.server) {
+        resolve();
+        return;
+      }
+      this.server.close(() => {
+        this.logger.info('http-transport', { action: 'stopped' });
         resolve();
       });
     });

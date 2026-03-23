@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+function safeParseInt(value: string): number | undefined {
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
 /**
  * Environment configuration schema with validation
  *
@@ -11,6 +16,7 @@ export const ConfigSchema = z.object({
   // API Keys (standard names for interoperability)
   tmdbApiKey: z.string().optional(),
   googleBooksApiKey: z.string().optional(),
+  hardcoverApiKey: z.string().optional(),
 
   // Transport settings
   transport: z.enum(['stdio', 'http']).default('stdio'),
@@ -31,8 +37,6 @@ export const ConfigSchema = z.object({
 
   // Feature flags
   enableGoodreadsScraping: z.boolean().default(true),
-  enableCoverDownload: z.boolean().default(false),
-  coverDownloadDir: z.string().default('./covers'),
 
   // Logging
   logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
@@ -62,10 +66,11 @@ export function loadConfig(): { config: Config; sources: SourceStatus[] } {
     // API Keys (standard names for interoperability)
     tmdbApiKey: process.env.TMDB_API_KEY,
     googleBooksApiKey: process.env.GOOGLE_BOOKS_API_KEY,
+    hardcoverApiKey: process.env.HARDCOVER_API_KEY,
 
     // Transport settings (MCP_ prefix)
     transport: process.env.MCP_TRANSPORT as Config['transport'] | undefined,
-    httpPort: process.env.MCP_HTTP_PORT ? parseInt(process.env.MCP_HTTP_PORT, 10) : undefined,
+    httpPort: process.env.MCP_HTTP_PORT ? safeParseInt(process.env.MCP_HTTP_PORT) : undefined,
     httpHost: process.env.MCP_HTTP_HOST,
     httpPath: process.env.MCP_HTTP_PATH,
 
@@ -73,27 +78,25 @@ export function loadConfig(): { config: Config; sources: SourceStatus[] } {
     cacheEnabled: process.env.MCP_CACHE_ENABLED !== 'false',
     cachePath: process.env.MCP_CACHE_PATH,
     cacheTtlBooks: process.env.MCP_CACHE_TTL_BOOKS
-      ? parseInt(process.env.MCP_CACHE_TTL_BOOKS, 10)
+      ? safeParseInt(process.env.MCP_CACHE_TTL_BOOKS)
       : undefined,
     cacheTtlMovies: process.env.MCP_CACHE_TTL_MOVIES
-      ? parseInt(process.env.MCP_CACHE_TTL_MOVIES, 10)
+      ? safeParseInt(process.env.MCP_CACHE_TTL_MOVIES)
       : undefined,
     cacheTtlTv: process.env.MCP_CACHE_TTL_TV
-      ? parseInt(process.env.MCP_CACHE_TTL_TV, 10)
+      ? safeParseInt(process.env.MCP_CACHE_TTL_TV)
       : undefined,
 
     // Rate limiting (MCP_ prefix)
     rateLimitRequestsPerMinute: process.env.MCP_RATE_LIMIT_RPM
-      ? parseInt(process.env.MCP_RATE_LIMIT_RPM, 10)
+      ? safeParseInt(process.env.MCP_RATE_LIMIT_RPM)
       : undefined,
     rateLimitRetryAttempts: process.env.MCP_RATE_LIMIT_RETRIES
-      ? parseInt(process.env.MCP_RATE_LIMIT_RETRIES, 10)
+      ? safeParseInt(process.env.MCP_RATE_LIMIT_RETRIES)
       : undefined,
 
     // Feature flags (MCP_ prefix)
     enableGoodreadsScraping: process.env.MCP_ENABLE_GOODREADS_SCRAPING !== 'false',
-    enableCoverDownload: process.env.MCP_ENABLE_COVER_DOWNLOAD === 'true',
-    coverDownloadDir: process.env.MCP_COVER_DOWNLOAD_DIR,
 
     // Logging (MCP_ prefix)
     logLevel: process.env.MCP_LOG_LEVEL as Config['logLevel'] | undefined,
@@ -132,6 +135,11 @@ export function loadConfig(): { config: Config; sources: SourceStatus[] } {
       name: 'Goodreads',
       available: config.enableGoodreadsScraping,
       reason: config.enableGoodreadsScraping ? undefined : 'Goodreads scraping disabled',
+    },
+    {
+      name: 'Hardcover',
+      available: !!config.hardcoverApiKey,
+      reason: config.hardcoverApiKey ? undefined : 'HARDCOVER_API_KEY not set',
     },
   ];
 

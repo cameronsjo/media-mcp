@@ -21,6 +21,7 @@ import { SQLiteCache, type CacheOptions } from './cache/sqlite-cache.js';
 import { OpenLibrarySource } from './sources/open-library.js';
 import { GoogleBooksSource } from './sources/google-books.js';
 import { GoodreadsSource } from './sources/goodreads.js';
+import { HardcoverSource } from './sources/hardcover.js';
 import { TMDBSource } from './sources/tmdb.js';
 import {
   LookupBookTool,
@@ -61,6 +62,9 @@ const config = {
     googleBooks: {
       apiKey: appConfig.googleBooksApiKey || null,
     },
+    hardcover: {
+      apiKey: appConfig.hardcoverApiKey || null,
+    },
   },
   cache: {
     enabled: appConfig.cacheEnabled,
@@ -95,6 +99,7 @@ Environment Variables:
   API Keys:
     TMDB_API_KEY                  TMDB API key (required for movie/TV lookups)
     GOOGLE_BOOKS_API_KEY          Google Books API key (optional, for enhanced book data)
+    HARDCOVER_API_KEY             Hardcover API key (optional, for tropes/tags/ratings)
 
   Transport:
     MCP_TRANSPORT                 Transport type: stdio or http (default: stdio)
@@ -115,9 +120,6 @@ Environment Variables:
 
   Features:
     MCP_ENABLE_GOODREADS_SCRAPING Enable Goodreads scraping (default: true)
-    MCP_ENABLE_COVER_DOWNLOAD     Enable cover image download (default: false)
-    MCP_COVER_DOWNLOAD_DIR        Cover download directory (default: ./covers)
-
   Logging:
     MCP_LOG_LEVEL                 Log level: debug, info, warn, error (default: info)
 
@@ -154,6 +156,7 @@ const googleBooks = new GoogleBooksSource(
   rateLimiter
 );
 const goodreads = new GoodreadsSource(config.goodreads, cache, logger, rateLimiter);
+const hardcover = new HardcoverSource(config.apis.hardcover, cache, logger, rateLimiter);
 
 // Initialize TMDB for movies/TV
 let tmdb: TMDBSource | null = null;
@@ -166,7 +169,7 @@ if (config.apis.tmdb.apiKey) {
 }
 
 // Initialize tools with multiple book sources
-const bookSources = { openLibrary, googleBooks, goodreads };
+const bookSources = { openLibrary, googleBooks, goodreads, hardcover };
 const lookupBookTool = new LookupBookTool(openLibrary, logger, bookSources);
 const lookupMovieTool = tmdb ? new LookupMovieTool(tmdb, logger) : null;
 const lookupTVTool = tmdb ? new LookupTVTool(tmdb, logger) : null;
@@ -187,7 +190,7 @@ const tools: ToolDefinition[] = [
   {
     name: 'lookup_book',
     description:
-      'Look up book metadata by title, author, or ISBN. Searches Open Library, Google Books, and Goodreads for comprehensive information including series data, ratings, and cover images.',
+      'Look up book metadata by title, author, or ISBN. Searches Open Library, Google Books, Goodreads, and Hardcover for comprehensive information including series data, ratings, tropes, and cover images.',
     inputSchema: LookupBookInputSchema,
   },
 ];
@@ -383,6 +386,7 @@ function toMcpInputSchema(schema: z.ZodType<unknown>): Record<string, unknown> {
     $refStrategy: 'none', // Inline all definitions for MCP compatibility
   });
   // Remove $schema property as MCP doesn't need it
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { $schema: _, ...schemaWithoutMeta } = jsonSchema as Record<string, unknown>;
   return schemaWithoutMeta;
 }
@@ -514,6 +518,7 @@ async function main() {
     });
 
     await httpTransport.start();
+    stopTransport = () => httpTransport.stop();
 
     console.error(
       `Media Metadata MCP Server running on http://${config.http.host}:${config.http.port}${config.http.basePath}`
@@ -530,9 +535,19 @@ async function main() {
   }
 }
 
+let stopTransport: (() => Promise<void>) | undefined;
+
 // Handle shutdown
 async function shutdown() {
   logger.info('main', { action: 'shutting_down' });
+  try {
+    await stopTransport?.();
+  } catch (error) {
+    logger.error('main', {
+      action: 'transport_stop_failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
   cache.close();
   await shutdownTelemetry();
   process.exit(0);
