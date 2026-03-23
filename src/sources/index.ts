@@ -1,4 +1,5 @@
 export { OpenLibrarySource } from './open-library.js';
 export { GoogleBooksSource } from './google-books.js';
 export { GoodreadsSource, type GoodreadsConfig } from './goodreads.js';
+export { HardcoverSource, type HardcoverConfig } from './hardcover.js';
 export { TMDBSource } from './tmdb.js';

@@ -3,6 +3,7 @@ import type { BookResult, PartialBookData, LookupBookInput, BookSource } from '.
 import { OpenLibrarySource } from '../sources/open-library.js';
 import { GoogleBooksSource } from '../sources/google-books.js';
 import { GoodreadsSource } from '../sources/goodreads.js';
+import { HardcoverSource } from '../sources/hardcover.js';
 import { Logger } from '../utils/logger.js';
 import { mergeBookResults } from '../utils/merge-results.js';
 import { extractSeriesFromTitle } from '../utils/fuzzy-match.js';
@@ -12,7 +13,7 @@ export const LookupBookInputSchema = z.object({
   author: z.string().optional().describe('Author name (recommended for better matching)'),
   isbn: z.string().optional().describe('ISBN-10 or ISBN-13 (preferred if available)'),
   sources: z
-    .array(z.enum(['open_library', 'google_books', 'goodreads']))
+    .array(z.enum(['open_library', 'google_books', 'goodreads', 'hardcover']))
     .optional()
     .describe('Sources to query (defaults to all available)'),
 });
@@ -21,12 +22,14 @@ export interface BookSources {
   openLibrary: OpenLibrarySource;
   googleBooks: GoogleBooksSource;
   goodreads: GoodreadsSource;
+  hardcover: HardcoverSource;
 }
 
 export class LookupBookTool {
   private openLibrary: OpenLibrarySource;
   private googleBooks: GoogleBooksSource | null;
   private goodreads: GoodreadsSource | null;
+  private hardcover: HardcoverSource | null;
   private logger: Logger;
 
   constructor(
@@ -37,6 +40,7 @@ export class LookupBookTool {
     this.openLibrary = openLibrary;
     this.googleBooks = additionalSources?.googleBooks ?? null;
     this.goodreads = additionalSources?.goodreads ?? null;
+    this.hardcover = additionalSources?.hardcover ?? null;
     this.logger = logger;
   }
 
@@ -54,7 +58,7 @@ export class LookupBookTool {
     });
 
     // Determine which sources to query
-    const requestedSources = input.sources ?? ['open_library', 'google_books', 'goodreads'];
+    const requestedSources = input.sources ?? ['open_library', 'google_books', 'goodreads', 'hardcover'];
 
     // Query sources in parallel for better performance
     const searchPromises: Promise<void>[] = [];
@@ -72,6 +76,11 @@ export class LookupBookTool {
     // Goodreads (after other sources to avoid rate limiting)
     if (requestedSources.includes('goodreads') && this.goodreads?.isEnabled()) {
       searchPromises.push(this.searchGoodreads(input, results, sourcesQueried, sourcesFailed));
+    }
+
+    // Hardcover
+    if (requestedSources.includes('hardcover') && this.hardcover?.isEnabled()) {
+      searchPromises.push(this.searchHardcover(input, results, sourcesQueried, sourcesFailed));
     }
 
     // Wait for all searches to complete
@@ -228,6 +237,42 @@ export class LookupBookTool {
         error: error instanceof Error ? error.message : String(error),
       });
       sourcesFailed.push('goodreads');
+    }
+  }
+
+  private async searchHardcover(
+    input: LookupBookInput,
+    results: PartialBookData[],
+    sourcesQueried: BookSource[],
+    sourcesFailed: BookSource[]
+  ): Promise<void> {
+    if (!this.hardcover?.isEnabled()) return;
+
+    sourcesQueried.push('hardcover');
+
+    try {
+      let result: PartialBookData | null = null;
+
+      if (input.isbn) {
+        result = await this.hardcover.searchByISBN(input.isbn);
+      }
+
+      if (!result) {
+        result = await this.hardcover.searchByTitleAuthor(input.title, input.author);
+      }
+
+      if (result) {
+        results.push(result);
+      } else {
+        sourcesFailed.push('hardcover');
+      }
+    } catch (error) {
+      this.logger.error('lookup-book', {
+        action: 'source_error',
+        source: 'hardcover',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      sourcesFailed.push('hardcover');
     }
   }
 }

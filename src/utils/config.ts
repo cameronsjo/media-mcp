@@ -16,6 +16,7 @@ export const ConfigSchema = z.object({
   // API Keys (standard names for interoperability)
   tmdbApiKey: z.string().optional(),
   googleBooksApiKey: z.string().optional(),
+  hardcoverApiKey: z.string().optional(),
 
   // Transport settings
   transport: z.enum(['stdio', 'http']).default('stdio'),
@@ -65,6 +66,7 @@ export function loadConfig(): { config: Config; sources: SourceStatus[] } {
     // API Keys (standard names for interoperability)
     tmdbApiKey: process.env.TMDB_API_KEY,
     googleBooksApiKey: process.env.GOOGLE_BOOKS_API_KEY,
+    hardcoverApiKey: process.env.HARDCOVER_API_KEY,
 
     // Transport settings (MCP_ prefix)
     transport: process.env.MCP_TRANSPORT as Config['transport'] | undefined,
@@ -133,6 +135,11 @@ export function loadConfig(): { config: Config; sources: SourceStatus[] } {
       name: 'Goodreads',
       available: config.enableGoodreadsScraping,
       reason: config.enableGoodreadsScraping ? undefined : 'Goodreads scraping disabled',
+    },
+    {
+      name: 'Hardcover',
+      available: !!config.hardcoverApiKey,
+      reason: config.hardcoverApiKey ? undefined : 'HARDCOVER_API_KEY not set',
     },
   ];
 

@@ -85,7 +85,32 @@ export class GoogleBooksSource {
         },
       });
 
-      if (response.status !== 200 || !response.data.items?.length) {
+      if (response.status === 429 || response.status === 403) {
+        this.logger.warning('google-books', {
+          action: 'rate_limited',
+          status: response.status,
+          isbn: cleanISBN,
+          message: `Google Books returned ${response.status} — likely quota exhaustion or API key issue`,
+        });
+        return null;
+      }
+
+      if (response.status !== 200) {
+        this.logger.warning('google-books', {
+          action: 'isbn_lookup_failed',
+          status: response.status,
+          isbn: cleanISBN,
+        });
+        return null;
+      }
+
+      if (!response.data.items?.length) {
+        this.logger.debug('google-books', {
+          action: 'isbn_no_results',
+          isbn: cleanISBN,
+          totalItems: response.data.totalItems,
+          message: 'Search returned 200 but zero items — book may not exist in Google Books',
+        });
         return null;
       }
 
@@ -131,7 +156,35 @@ export class GoogleBooksSource {
         },
       });
 
-      if (response.status !== 200 || !response.data.items?.length) {
+      if (response.status === 429 || response.status === 403) {
+        this.logger.warning('google-books', {
+          action: 'rate_limited',
+          status: response.status,
+          title,
+          author,
+          message: `Google Books returned ${response.status} — likely quota exhaustion or API key issue`,
+        });
+        return null;
+      }
+
+      if (response.status !== 200) {
+        this.logger.warning('google-books', {
+          action: 'search_failed',
+          status: response.status,
+          title,
+          author,
+        });
+        return null;
+      }
+
+      if (!response.data.items?.length) {
+        this.logger.debug('google-books', {
+          action: 'search_no_results',
+          title,
+          author,
+          totalItems: response.data.totalItems,
+          message: 'Search returned 200 but zero items',
+        });
         return null;
       }
 

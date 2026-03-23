@@ -107,22 +107,16 @@ export class GoodreadsSource {
 
       const $ = cheerio.load(response.data as string);
 
-      // Find the first book result
-      const firstResult = $('tr[itemtype="http://schema.org/Book"]').first();
-      if (firstResult.length === 0) {
-        // Try alternative selector
-        const altResult = $('.tableList tr').first();
-        if (altResult.length === 0) {
-          return null;
-        }
-      }
-
-      // Get the book URL
-      const bookLink =
-        firstResult.find('a.bookTitle').attr('href') ||
-        firstResult.find('.bookTitle a').attr('href');
+      // Find the first book link — use URL pattern (resilient to class name changes)
+      const bookLink = $('a[href*="/book/show/"]').first().attr('href');
 
       if (!bookLink) {
+        this.logger.debug('goodreads', {
+          action: 'search_no_book_links',
+          title,
+          author,
+          message: 'No a[href*="/book/show/"] found on search results page',
+        });
         return null;
       }
 
@@ -173,77 +167,98 @@ export class GoodreadsSource {
 
       const $ = cheerio.load(response.data as string);
 
-      // Extract rating
+      // Extract rating — try multiple selectors (modern → legacy)
       const ratingText =
-        $('[itemprop="ratingValue"]').text().trim() || $('.RatingStatistics__rating').text().trim();
-      const ratingCountText =
-        $('[itemprop="ratingCount"]').attr('content') ||
-        $('.RatingStatistics__meta')
-          .text()
-          .match(/[\d,]+\s*ratings/)?.[0];
+        $('.RatingStatistics__rating').text().trim() ||
+        $('[itemprop="ratingValue"]').text().trim();
+      // Look for rating count in page text
+      const pageText = $.text();
+      const ratingCountMatch = pageText.match(/([\d,]+)\s*ratings/);
+      const ratingCountFromAttr = $('[itemprop="ratingCount"]').attr('content');
 
       const rating = ratingText ? parseFloat(ratingText) : null;
-      const ratingCount = ratingCountText
-        ? parseInt(ratingCountText.replace(/[^\d]/g, ''), 10)
-        : null;
+      const ratingCount = ratingCountFromAttr
+        ? parseInt(ratingCountFromAttr.replace(/[^\d]/g, ''), 10)
+        : ratingCountMatch
+          ? parseInt(ratingCountMatch[1].replace(/[^\d]/g, ''), 10)
+          : null;
 
-      // Extract genres
+      // Extract genres — URL-pattern based (resilient to class changes)
       const genres: string[] = [];
-      $(
-        '.BookPageMetadataSection__genres .Button__labelItem, .actionLinkLite.bookPageGenreLink'
-      ).each((_, el) => {
+      $('a[href*="/genres/"]').each((_, el) => {
         const genre = $(el).text().trim();
         if (genre && !genres.includes(genre)) {
           genres.push(genre);
         }
       });
 
-      // Extract shelves/tropes from user shelves
+      // Extract shelves/tropes from genre links and shelf sections
       const shelves: string[] = [];
       const tropes: string[] = [];
 
-      // Try to extract from popular shelves section
-      $('.BookPageMetadataSection__shelves .ShelfList .Button__labelItem, .actionLinkLite.bookPageGenreLink, .elementList .left .actionLinkLite, .greyText.stacked .left .actionLinkLite').each((_, el) => {
+      // Genres double as shelves on modern Goodreads
+      for (const genre of genres) {
+        if (!shelves.includes(genre)) {
+          shelves.push(genre);
+          if (this.isTrope(genre)) {
+            tropes.push(genre);
+          }
+        }
+      }
+
+      // Also try legacy shelf selectors as fallback
+      $(
+        '.ShelfList .Button__labelItem, .actionLinkLite.bookPageGenreLink, .elementList .left a, .bigBox .bigBoxBody .elementList .left a'
+      ).each((_, el) => {
         const shelfText = $(el).text().trim();
         if (shelfText && !shelves.includes(shelfText)) {
           shelves.push(shelfText);
-
-          // Common romance/fantasy tropes to extract
           if (this.isTrope(shelfText)) {
             tropes.push(shelfText);
           }
         }
       });
 
-      // Also look for popular shelves in the right sidebar
-      $('.bigBox .bigBoxBody .elementList .left a').each((_, el) => {
-        const shelfText = $(el).text().trim();
-        if (shelfText && !shelves.includes(shelfText)) {
-          shelves.push(shelfText);
-
-          if (this.isTrope(shelfText)) {
-            tropes.push(shelfText);
-          }
-        }
+      this.logger.debug('goodreads', {
+        action: 'selectors_matched',
+        bookId,
+        genreCount: genres.length,
+        shelfCount: shelves.length,
+        tropeCount: tropes.length,
+        ratingFound: rating !== null,
       });
 
       // Extract series info
       const seriesInfo = this.extractSeriesInfo($);
 
-      // Extract page count
+      // Extract page count — look for "N pages" pattern in text
       const pageCountText =
-        $('[itemprop="numberOfPages"]').text() || $('[data-testid="pagesFormat"]').text();
-      const pageCount = pageCountText ? parseInt(pageCountText.replace(/[^\d]/g, ''), 10) : null;
+        $('[data-testid="pagesFormat"]').text() ||
+        $('[itemprop="numberOfPages"]').text();
+      let pageCount: number | null = null;
+      if (pageCountText) {
+        pageCount = parseInt(pageCountText.replace(/[^\d]/g, ''), 10);
+      } else {
+        // Fallback: search page text for "N pages" pattern
+        const pagesMatch = pageText.match(/(\d+)\s*pages/);
+        if (pagesMatch) {
+          pageCount = parseInt(pagesMatch[1], 10);
+        }
+      }
 
-      // Extract description
+      // Extract description — try multiple selectors
       const description =
         $('[data-testid="description"] .Formatted').text().trim() ||
         $('.DetailsLayoutRightParagraph__widthConstrained').text().trim() ||
-        $('[itemprop="description"]').text().trim();
+        $('[itemprop="description"]').text().trim() ||
+        '';
 
-      // Extract cover URL
+      // Extract cover URL — use image source patterns
       const coverUrl =
-        $('.BookCover__image img').attr('src') || $('[itemprop="image"]').attr('content') || null;
+        $('img[src*="compressed.photo.goodreads.com"]').first().attr('src') ||
+        $('.BookCover__image img').attr('src') ||
+        $('[itemprop="image"]').attr('content') ||
+        null;
 
       const result: PartialBookData = {
         rating: rating && ratingCount ? { score: rating, count: ratingCount } : undefined,
@@ -457,7 +472,7 @@ export class GoodreadsSource {
       'comingofage',
     ];
 
-    // Dark romance/BDSM tropes
+    // Dark romance/BDSM/kink tropes
     const darkTropes = [
       'darkromance',
       'bdsm',
@@ -477,6 +492,19 @@ export class GoodreadsSource {
       'morallygray',
       'whychoose',
       'reverseharems',
+      'pegging',
+      'breeding',
+      'daddykink',
+      'omegaverse',
+      'kinkexploration',
+      'bodyworshipromance',
+      'spicy',
+      'smut',
+      'erotica',
+      'forbiddenromance',
+      'slowburn',
+      'forcedproximity',
+      'monsterromance',
     ];
 
     // Other relationship tropes
