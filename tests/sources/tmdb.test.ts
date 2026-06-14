@@ -306,6 +306,9 @@ describe('TMDBSource', () => {
 
       const calledUrl = String(mockRequest.mock.calls[0][0]);
       const calledHeaders = (mockRequest.mock.calls[0][1] as any).headers;
+      // The /3 API-version prefix must survive URL construction (regression: a
+      // leading-slash path dropped it, yielding 404s on every TMDB request).
+      expect(calledUrl).toContain('https://api.themoviedb.org/3/search/movie');
       expect(calledUrl).toContain(`api_key=${V3_KEY}`);
       expect(calledHeaders.Authorization).toBeUndefined();
     });

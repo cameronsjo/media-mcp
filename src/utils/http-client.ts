@@ -89,13 +89,32 @@ export class HttpClient {
   }
 
   /**
+   * Resolve a request path against the base URL, preserving any path component
+   * in the base. `new URL('/x', 'https://h/3')` treats the leading slash as
+   * root-relative and drops the `/3`; when the base carries its own path (e.g.
+   * TMDB's `/3`, Google Books' `/books/v1`) we strip the leading slash and join
+   * against a slash-terminated base so the base path survives. Origin-only bases
+   * and absolute/empty paths fall through to plain resolution unchanged.
+   */
+  private resolveUrl(path: string): URL {
+    if (this.baseUrl && path.startsWith('/')) {
+      const basePath = new URL(this.baseUrl).pathname.replace(/\/+$/, '');
+      if (basePath !== '') {
+        const base = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
+        return new URL(path.slice(1), base);
+      }
+    }
+    return new URL(path, this.baseUrl);
+  }
+
+  /**
    * Build URL with query parameters
    */
   private buildUrl(
     path: string,
     params?: Record<string, string | number | boolean | undefined>
   ): string {
-    const url = new URL(path, this.baseUrl);
+    const url = this.resolveUrl(path);
 
     // Default params first, then per-call params so callers can override defaults.
     const merged = { ...this.params, ...params };

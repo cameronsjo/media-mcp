@@ -80,4 +80,66 @@ describe('HttpClient', () => {
       expect(calledUrl).toBe('https://api.example.com/plain');
     });
   });
+
+  describe('baseUrl with a path component', () => {
+    it('preserves the base path for a leading-slash path (does not drop /3)', async () => {
+      const client = new HttpClient(
+        'test',
+        { baseUrl: 'https://api.themoviedb.org/3' },
+        logger,
+        rateLimiter
+      );
+      mockJsonResponse({ ok: true });
+
+      await client.get('/search/movie', { params: { query: 'matrix' } });
+
+      const calledUrl = String(mockRequest.mock.calls[0][0]);
+      expect(calledUrl).toContain('https://api.themoviedb.org/3/search/movie');
+    });
+
+    it('preserves a multi-segment base path (google-books /books/v1)', async () => {
+      const client = new HttpClient(
+        'test',
+        { baseUrl: 'https://www.googleapis.com/books/v1' },
+        logger,
+        rateLimiter
+      );
+      mockJsonResponse({ ok: true });
+
+      await client.get('/volumes');
+
+      const calledUrl = String(mockRequest.mock.calls[0][0]);
+      expect(calledUrl).toBe('https://www.googleapis.com/books/v1/volumes');
+    });
+
+    it('leaves an origin-only baseUrl unchanged', async () => {
+      const client = new HttpClient(
+        'test',
+        { baseUrl: 'https://openlibrary.org' },
+        logger,
+        rateLimiter
+      );
+      mockJsonResponse({ ok: true });
+
+      await client.get('/search.json');
+
+      const calledUrl = String(mockRequest.mock.calls[0][0]);
+      expect(calledUrl).toBe('https://openlibrary.org/search.json');
+    });
+
+    it('does not append a trailing slash for an empty path against a path base (graphql POST)', async () => {
+      const client = new HttpClient(
+        'test',
+        { baseUrl: 'https://api.hardcover.app/v1/graphql' },
+        logger,
+        rateLimiter
+      );
+      mockJsonResponse({ ok: true });
+
+      await client.post('', { query: '{ me { id } }' });
+
+      const calledUrl = String(mockRequest.mock.calls[0][0]);
+      expect(calledUrl).toBe('https://api.hardcover.app/v1/graphql');
+    });
+  });
 });
