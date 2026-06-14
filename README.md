@@ -27,7 +27,7 @@ The server is configured via environment variables. App-specific variables use t
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `TMDB_API_KEY` | TMDB API key (required for movie/TV lookups) | - |
+| `TMDB_API_KEY` | TMDB credential for movie/TV lookups — accepts **either** a v3 API Key (32-hex) **or** a v4 Read Access Token; the server auto-detects the scheme | - |
 | `GOOGLE_BOOKS_API_KEY` | Google Books API key (optional, for enhanced book data) | - |
 
 ### Transport
@@ -83,9 +83,11 @@ The server is configured via environment variables. App-specific variables use t
 #### TMDB API Key (Required for Movie/TV)
 
 1. Create a free account at [TMDB](https://www.themoviedb.org/)
-2. Go to Settings → API
-3. Request an API key (choose "Developer" option)
-4. Copy your API Read Access Token
+2. Go to Settings → API and request a key (choose the "Developer" option)
+3. That page exposes **two** credentials — either one works:
+   - **API Key (v3 auth)** — a 32-character hex string, sent as the `api_key` query parameter
+   - **API Read Access Token (v4 auth)** — a longer JWT, sent as an `Authorization: Bearer` header
+4. Copy **either one** into `TMDB_API_KEY`. The server auto-detects the scheme from the value's shape — do **not** prepend `Bearer `.
 
 ## Usage
 

@@ -11,6 +11,8 @@ export interface HttpResponse<T = unknown> {
 export interface HttpClientOptions {
   baseUrl?: string;
   headers?: Record<string, string>;
+  /** Query params merged into every request (per-call params take precedence). */
+  params?: Record<string, string | number | boolean | undefined>;
   timeout?: number;
 }
 
@@ -28,6 +30,7 @@ const USER_AGENTS = [
 export class HttpClient {
   private baseUrl: string;
   private headers: Record<string, string>;
+  private params: Record<string, string | number | boolean | undefined>;
   private timeout: number;
   private logger: Logger;
   private rateLimiter: RateLimiter;
@@ -42,6 +45,7 @@ export class HttpClient {
     this.source = source;
     this.baseUrl = options.baseUrl ?? '';
     this.headers = options.headers ?? {};
+    this.params = options.params ?? {};
     this.timeout = options.timeout ?? 30000;
     this.logger = logger;
     this.rateLimiter = rateLimiter;
@@ -93,11 +97,11 @@ export class HttpClient {
   ): string {
     const url = new URL(path, this.baseUrl);
 
-    if (params) {
-      for (const [key, value] of Object.entries(params)) {
-        if (value !== undefined) {
-          url.searchParams.set(key, String(value));
-        }
+    // Default params first, then per-call params so callers can override defaults.
+    const merged = { ...this.params, ...params };
+    for (const [key, value] of Object.entries(merged)) {
+      if (value !== undefined) {
+        url.searchParams.set(key, String(value));
       }
     }
 

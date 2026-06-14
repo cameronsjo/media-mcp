@@ -160,6 +160,7 @@ export class TMDBSource {
   private client: HttpClient;
   private cache: SQLiteCache;
   private logger: Logger;
+  private authMode: string;
 
   constructor(
     apiKey: string,
@@ -176,17 +177,50 @@ export class TMDBSource {
       windowMs: 10000,
     });
 
+    // TMDB issues two key types and they use different auth schemes:
+    //   - a v3 API Key (32 hex chars) sent as the `api_key` query param
+    //   - a v4 Read Access Token (a JWT) sent as an `Authorization: Bearer` header
+    // Sending a v3 key as a v4 bearer (or vice versa) 401s. Auto-detect by
+    // shape so an existing v3 deployment keeps working without rotating secrets.
+    const isV3 = /^[0-9a-f]{32}$/i.test(apiKey);
+    this.authMode = isV3 ? 'v3-query-param' : 'v4-bearer';
+
     this.client = new HttpClient(
       SOURCE,
       {
         baseUrl: BASE_URL,
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-        },
+        headers: isV3 ? {} : { Authorization: `Bearer ${apiKey}` },
+        params: isV3 ? { api_key: apiKey } : undefined,
       },
       logger,
       rateLimiter
     );
+
+    // Record the detected scheme for diagnosis — never the key itself.
+    this.logger.debug('tmdb', { action: 'auth_configured', mode: this.authMode });
+  }
+
+  /**
+   * Log a non-200 from a TMDB search endpoint. Auth failures (401/403) get an
+   * actionable message pointing at the key/scheme; other failures get a generic
+   * one. Without this, a non-throwing 401 was swallowed as a silent null.
+   */
+  private logSearchFailure(
+    action: string,
+    endpoint: string,
+    status: number,
+    ctx: Record<string, unknown>
+  ): void {
+    const isAuthFailure = status === 401 || status === 403;
+    this.logger.warning('tmdb', {
+      action,
+      status,
+      endpoint,
+      ...ctx,
+      message: isAuthFailure
+        ? `TMDB auth failed (${status}) — verify TMDB_API_KEY / auth scheme`
+        : `TMDB request failed (${status})`,
+    });
   }
 
   /**
@@ -209,7 +243,17 @@ export class TMDBSource {
         },
       });
 
-      if (response.status !== 200 || response.data.total_results === 0) {
+      // A transport/auth failure is an error worth surfacing...
+      if (response.status !== 200) {
+        this.logSearchFailure('search_movie_failed', '/search/movie', response.status, {
+          title,
+          year,
+        });
+        return null;
+      }
+
+      // ...but a successful search that simply matched nothing is not.
+      if (response.data.total_results === 0) {
         return null;
       }
 
@@ -350,7 +394,17 @@ export class TMDBSource {
         },
       });
 
-      if (response.status !== 200 || response.data.total_results === 0) {
+      // A transport/auth failure is an error worth surfacing...
+      if (response.status !== 200) {
+        this.logSearchFailure('search_tv_failed', '/search/tv', response.status, {
+          title,
+          year,
+        });
+        return null;
+      }
+
+      // ...but a successful search that simply matched nothing is not.
+      if (response.data.total_results === 0) {
         return null;
       }
 
