@@ -269,4 +269,132 @@ describe('TMDBSource', () => {
       expect(result?.identifiers.imdb).toBe('tt0903747');
     });
   });
+
+  describe('authentication', () => {
+    const V3_KEY = '0123456789abcdef0123456789abcdef';
+
+    function mockSearchHit() {
+      mockRequest.mockResolvedValueOnce({
+        statusCode: 200,
+        headers: {},
+        body: {
+          text: vi.fn().mockResolvedValue(
+            JSON.stringify({
+              page: 1,
+              total_results: 1,
+              total_pages: 1,
+              results: [
+                {
+                  id: 603,
+                  title: 'The Matrix',
+                  release_date: '1999-03-30',
+                  vote_average: 8.2,
+                  popularity: 80,
+                },
+              ],
+            })
+          ),
+        },
+      } as any);
+    }
+
+    it('sends a 32-hex v3 key as the api_key query param with no Authorization header', async () => {
+      const v3Source = new TMDBSource(V3_KEY, cache, logger, rateLimiter);
+      mockSearchHit();
+
+      await v3Source.searchMovie('The Matrix', 1999);
+
+      const calledUrl = String(mockRequest.mock.calls[0][0]);
+      const calledHeaders = (mockRequest.mock.calls[0][1] as any).headers;
+      expect(calledUrl).toContain(`api_key=${V3_KEY}`);
+      expect(calledHeaders.Authorization).toBeUndefined();
+    });
+
+    it('sends a non-hex v4 token as a Bearer header with no api_key query param', async () => {
+      const v4Token = 'eyJhbGciOiJIUzI1NiJ9.fake.v4token';
+      const v4Source = new TMDBSource(v4Token, cache, logger, rateLimiter);
+      mockSearchHit();
+
+      await v4Source.searchMovie('The Matrix', 1999);
+
+      const calledUrl = String(mockRequest.mock.calls[0][0]);
+      const calledHeaders = (mockRequest.mock.calls[0][1] as any).headers;
+      expect(calledUrl).not.toContain('api_key=');
+      expect(calledHeaders.Authorization).toBe(`Bearer ${v4Token}`);
+    });
+
+    it('logs a warning instead of a silent null when TMDB returns 401', async () => {
+      const emitter = vi.fn();
+      logger.setEmitter(emitter);
+      logger.setLevel('warning');
+
+      mockRequest.mockResolvedValueOnce({
+        statusCode: 401,
+        headers: {},
+        body: {
+          text: vi.fn().mockResolvedValue(
+            JSON.stringify({ status_code: 7, status_message: 'Invalid API key' })
+          ),
+        },
+      } as any);
+
+      const result = await source.searchMovie('The Matrix', 1999);
+
+      expect(result).toBeNull();
+      const warnings = emitter.mock.calls
+        .map((c) => c[0])
+        .filter((e) => e.level === 'warning' && e.data.action === 'search_movie_failed');
+      expect(warnings.length).toBe(1);
+      expect(warnings[0].data.status).toBe(401);
+      expect(warnings[0].data.endpoint).toBe('/search/movie');
+    });
+
+    it('logs a warning when TMDB TV search returns 403', async () => {
+      const emitter = vi.fn();
+      logger.setEmitter(emitter);
+      logger.setLevel('warning');
+
+      mockRequest.mockResolvedValueOnce({
+        statusCode: 403,
+        headers: {},
+        body: {
+          text: vi.fn().mockResolvedValue(JSON.stringify({ status_message: 'Forbidden' })),
+        },
+      } as any);
+
+      const result = await source.searchTV('Breaking Bad');
+
+      expect(result).toBeNull();
+      const warnings = emitter.mock.calls
+        .map((c) => c[0])
+        .filter((e) => e.level === 'warning' && e.data.action === 'search_tv_failed');
+      expect(warnings.length).toBe(1);
+      expect(warnings[0].data.status).toBe(403);
+      expect(warnings[0].data.endpoint).toBe('/search/tv');
+    });
+
+    it('stays a silent null (no warning) when search legitimately finds nothing', async () => {
+      const emitter = vi.fn();
+      logger.setEmitter(emitter);
+      logger.setLevel('warning');
+
+      mockRequest.mockResolvedValueOnce({
+        statusCode: 200,
+        headers: {},
+        body: {
+          text: vi.fn().mockResolvedValue(
+            JSON.stringify({ page: 1, total_results: 0, total_pages: 0, results: [] })
+          ),
+        },
+      } as any);
+
+      const result = await source.searchMovie('Nonexistent Movie');
+
+      expect(result).toBeNull();
+      const warnings = emitter.mock.calls
+        .map((c) => c[0])
+        .filter((e) => e.level === 'warning');
+      expect(warnings.length).toBe(0);
+    });
+  });
 });
