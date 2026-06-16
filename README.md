@@ -158,7 +158,7 @@ Look up book metadata by title, author, or ISBN.
 
 **Output:** Book metadata including title, authors, ISBN, genres, page count, description, cover URL, series information, and ratings.
 
-Optional `compact: true` trims the response — nulls `description` and drops the noisy `shelves`/`subjects` arrays (the bulk of the payload), keeping genres, tropes, series, ratings, cover, and identifiers. Useful for batch lookups that would otherwise exceed inline token limits.
+Responses are **compact by default** — `description` is nulled and the noisy `shelves`/`subjects` arrays dropped (the bulk of the payload), keeping genres, tropes, series, ratings, cover, and identifiers. This keeps batch lookups within inline token limits. Pass `compact: false` to get the full description back.
 
 ### lookup_movie
 
@@ -174,7 +174,7 @@ Look up movie metadata by title and optional year.
 
 **Output:** Movie metadata including title, year, runtime, genres, description, cast, director, collection info, ratings, and watch providers.
 
-By default the large ~100-region `watch_providers` map is **omitted** to keep responses compact. To include it, pass `include_watch_providers: true`, or restrict it to specific regions with `watch_provider_regions: ["US"]` (which implies inclusion).
+By default `watch_providers` returns the **`US` region only** — the full map spans ~100 regions and would otherwise dominate the payload. Pass `watch_provider_regions: ["GB", "US"]` to choose regions, `watch_provider_regions: []` for all ~100, or `include_watch_providers: false` to omit the map entirely.
 
 ### lookup_tv
 

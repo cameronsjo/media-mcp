@@ -16,8 +16,8 @@ export const LookupBookInputSchema = z.object({
     .array(z.enum(['open_library', 'google_books', 'goodreads', 'hardcover']))
     .optional()
     .describe('Sources to query (defaults to all available)'),
-  compact: z.boolean().default(false)
-    .describe('Trim the response: null the description and drop shelves/subjects (the bulk of the payload), keeping genres/tropes/series/ratings/cover/identifiers.'),
+  compact: z.boolean().default(true)
+    .describe('Trim the response (default): null the description and drop shelves/subjects (the bulk of the payload), keeping genres/tropes/series/ratings/cover/identifiers. Set false for the full description.'),
 });
 
 /**
