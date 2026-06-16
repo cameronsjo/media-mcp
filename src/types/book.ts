@@ -51,6 +51,7 @@ export const LookupBookInputSchema = z.object({
   author: z.string().optional(),
   isbn: z.string().optional(),
   sources: z.array(BookSourceSchema).optional(),
+  compact: z.boolean().default(false),
 });
 export type LookupBookInput = z.infer<typeof LookupBookInputSchema>;
 

@@ -16,7 +16,24 @@ export const LookupBookInputSchema = z.object({
     .array(z.enum(['open_library', 'google_books', 'goodreads', 'hardcover']))
     .optional()
     .describe('Sources to query (defaults to all available)'),
+  compact: z.boolean().default(false)
+    .describe('Trim the response: null the description and drop shelves/subjects (the bulk of the payload), keeping genres/tropes/series/ratings/cover/identifiers.'),
 });
+
+/**
+ * Trim the heaviest, lowest-signal fields from a book result — the full
+ * description (often 500+ words) and the noisy shelves/subjects arrays — which
+ * together dominate batch payloads. Keeps the high-signal fields. Returns a new
+ * object; never mutates the input.
+ */
+export function compactBookResult(result: BookResult): BookResult {
+  return {
+    ...result,
+    description: null,
+    shelves: [],
+    subjects: [],
+  };
+}
 
 export interface BookSources {
   openLibrary: OpenLibrarySource;
@@ -135,7 +152,7 @@ export class LookupBookTool {
       duration_ms: Date.now() - startTime,
     });
 
-    return bookResult;
+    return input.compact ? compactBookResult(bookResult) : bookResult;
   }
 
   private async searchOpenLibrary(
