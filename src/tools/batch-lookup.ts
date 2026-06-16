@@ -12,8 +12,8 @@ const BatchBookItemSchema = z.object({
   title: z.string().min(1),
   author: z.string().optional(),
   isbn: z.string().optional(),
-  compact: z.boolean().default(false)
-    .describe('Trim each book: null description, drop shelves/subjects (cuts most of the payload)'),
+  compact: z.boolean().default(true)
+    .describe('Trim each book (default): null description, drop shelves/subjects. Set false for full descriptions.'),
 });
 
 const BatchMovieItemSchema = z.object({
@@ -21,10 +21,10 @@ const BatchMovieItemSchema = z.object({
   title: z.string().min(1),
   year: z.number().int().optional(),
   tmdb_id: z.number().int().optional(),
-  include_watch_providers: z.boolean().default(false)
-    .describe('Include the ~100-region watch-providers map (off by default — large)'),
-  watch_provider_regions: z.array(z.string()).optional()
-    .describe('Restrict watch_providers to these ISO country codes, e.g. ["US"]. Implies inclusion.'),
+  include_watch_providers: z.boolean().default(true)
+    .describe('Include watch_providers. Set false to omit entirely.'),
+  watch_provider_regions: z.array(z.string()).default(['US'])
+    .describe('Restrict watch_providers to these ISO country codes. Defaults to ["US"]; pass [] for all regions.'),
 });
 
 const BatchTVItemSchema = z.object({

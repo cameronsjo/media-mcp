@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { shapeWatchProviders, LookupMovieTool } from '../../src/tools/lookup-movie.js';
-import { compactBookResult } from '../../src/tools/lookup-book.js';
+import { shapeWatchProviders, LookupMovieTool, LookupMovieInputSchema } from '../../src/tools/lookup-movie.js';
+import { compactBookResult, LookupBookInputSchema } from '../../src/tools/lookup-book.js';
 import { Logger } from '../../src/utils/logger.js';
 import type { TMDBSource } from '../../src/sources/tmdb.js';
 import type { MovieResult, RegionalWatchProviders } from '../../src/types/movie.js';
@@ -21,9 +21,17 @@ describe('shapeWatchProviders (#30)', () => {
     expect(shapeWatchProviders(PROVIDERS, { includeWatchProviders: true })).toEqual(PROVIDERS);
   });
 
-  it('treats a region filter as implicit inclusion (even when include is false)', () => {
+  it('returns {} when include is false, even with a region filter (explicit opt-out wins)', () => {
     const out = shapeWatchProviders(PROVIDERS, {
       includeWatchProviders: false,
+      watchProviderRegions: ['US'],
+    });
+    expect(out).toEqual({});
+  });
+
+  it('filters to the given regions when included', () => {
+    const out = shapeWatchProviders(PROVIDERS, {
+      includeWatchProviders: true,
       watchProviderRegions: ['US'],
     });
     expect(Object.keys(out)).toEqual(['US']);
@@ -124,17 +132,38 @@ describe('LookupMovieTool watch_providers wiring (#30)', () => {
     return new LookupMovieTool(tmdb, new Logger('test'));
   }
 
-  it('omits watch_providers by default (opt-in compact)', async () => {
-    const res = await toolReturning(makeMovie()).execute({
+  it('returns only US watch_providers on a default lookup', async () => {
+    const input = LookupMovieInputSchema.parse({ title: 'The Matrix' });
+    const res = await toolReturning(makeMovie()).execute(input);
+    expect(Object.keys(res.watch_providers)).toEqual(['US']);
+  });
+
+  it('omits watch_providers entirely when include_watch_providers is false', async () => {
+    const input = LookupMovieInputSchema.parse({
       title: 'The Matrix', include_watch_providers: false,
     });
+    const res = await toolReturning(makeMovie()).execute(input);
     expect(res.watch_providers).toEqual({});
   });
 
-  it('includes only the requested region when watch_provider_regions is set', async () => {
-    const res = await toolReturning(makeMovie()).execute({
-      title: 'The Matrix', include_watch_providers: false, watch_provider_regions: ['US'],
+  it('returns all regions when watch_provider_regions is empty', async () => {
+    const input = LookupMovieInputSchema.parse({
+      title: 'The Matrix', watch_provider_regions: [],
     });
-    expect(Object.keys(res.watch_providers)).toEqual(['US']);
+    const res = await toolReturning(makeMovie()).execute(input);
+    expect(Object.keys(res.watch_providers).sort()).toEqual(['GB', 'US']);
+  });
+});
+
+describe('default input shapes', () => {
+  it('defaults movie lookups to US providers, included', () => {
+    const parsed = LookupMovieInputSchema.parse({ title: 'x' });
+    expect(parsed.include_watch_providers).toBe(true);
+    expect(parsed.watch_provider_regions).toEqual(['US']);
+  });
+
+  it('defaults book lookups to compact', () => {
+    const parsed = LookupBookInputSchema.parse({ title: 'x' });
+    expect(parsed.compact).toBe(true);
   });
 });

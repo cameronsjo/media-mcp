@@ -9,37 +9,39 @@ export const LookupMovieInputSchema = z.object({
     .describe('Release year (improves matching accuracy)'),
   tmdb_id: z.number().int().positive().optional()
     .describe('TMDB ID if known (preferred for exact match)'),
-  include_watch_providers: z.boolean().default(false)
-    .describe('Include the regional watch-providers map (large — ~100 regions). Off by default to keep responses compact.'),
-  watch_provider_regions: z.array(z.string()).optional()
-    .describe('Restrict watch_providers to these ISO country codes, e.g. ["US"]. Implies inclusion.'),
+  include_watch_providers: z.boolean().default(true)
+    .describe('Include watch_providers. Set false to omit the map entirely.'),
+  watch_provider_regions: z.array(z.string()).default(['US'])
+    .describe('Restrict watch_providers to these ISO country codes. Defaults to ["US"]; pass [] for all ~100 regions.'),
 });
 
 /**
  * Shape the regional watch-providers map per the caller's request. The full map
  * spans ~100 region keys and dominates the movie payload (a context bomb for
- * agents), so it is omitted unless explicitly asked for. A region filter implies
- * inclusion. Returns a new object — never mutates the (possibly cached) input.
+ * agents), so callers get a single region (US) by default. Precedence: an
+ * explicit `include_watch_providers: false` always wins (returns {}); otherwise
+ * a non-empty region list filters; an empty list returns all regions. Returns a
+ * new object — never mutates the (possibly cached) input.
  */
 export function shapeWatchProviders(
   providers: RegionalWatchProviders,
   opts: { includeWatchProviders: boolean; watchProviderRegions?: string[] }
 ): RegionalWatchProviders {
-  const hasRegionFilter = !!opts.watchProviderRegions && opts.watchProviderRegions.length > 0;
-  if (!opts.includeWatchProviders && !hasRegionFilter) {
+  if (!opts.includeWatchProviders) {
     return {};
   }
-  if (hasRegionFilter) {
-    const wanted = new Set(opts.watchProviderRegions!.map((r) => r.toUpperCase()));
-    const filtered: RegionalWatchProviders = {};
-    for (const [region, data] of Object.entries(providers)) {
-      if (wanted.has(region.toUpperCase())) {
-        filtered[region] = data;
-      }
-    }
-    return filtered;
+  const hasRegionFilter = !!opts.watchProviderRegions && opts.watchProviderRegions.length > 0;
+  if (!hasRegionFilter) {
+    return providers;
   }
-  return providers;
+  const wanted = new Set(opts.watchProviderRegions!.map((r) => r.toUpperCase()));
+  const filtered: RegionalWatchProviders = {};
+  for (const [region, data] of Object.entries(providers)) {
+    if (wanted.has(region.toUpperCase())) {
+      filtered[region] = data;
+    }
+  }
+  return filtered;
 }
 
 export class LookupMovieTool {
