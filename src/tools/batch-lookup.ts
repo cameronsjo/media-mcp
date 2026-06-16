@@ -12,6 +12,8 @@ const BatchBookItemSchema = z.object({
   title: z.string().min(1),
   author: z.string().optional(),
   isbn: z.string().optional(),
+  compact: z.boolean().default(false)
+    .describe('Trim each book: null description, drop shelves/subjects (cuts most of the payload)'),
 });
 
 const BatchMovieItemSchema = z.object({
@@ -19,6 +21,10 @@ const BatchMovieItemSchema = z.object({
   title: z.string().min(1),
   year: z.number().int().optional(),
   tmdb_id: z.number().int().optional(),
+  include_watch_providers: z.boolean().default(false)
+    .describe('Include the ~100-region watch-providers map (off by default — large)'),
+  watch_provider_regions: z.array(z.string()).optional()
+    .describe('Restrict watch_providers to these ISO country codes, e.g. ["US"]. Implies inclusion.'),
 });
 
 const BatchTVItemSchema = z.object({
@@ -152,6 +158,7 @@ export class BatchLookupTool {
             title: item.title,
             author: item.author,
             isbn: item.isbn,
+            compact: item.compact,
           });
           break;
 
@@ -160,6 +167,8 @@ export class BatchLookupTool {
             title: item.title,
             year: item.year,
             tmdb_id: item.tmdb_id,
+            include_watch_providers: item.include_watch_providers,
+            watch_provider_regions: item.watch_provider_regions,
           });
           break;
 

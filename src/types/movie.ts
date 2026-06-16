@@ -50,6 +50,8 @@ export const LookupMovieInputSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   year: z.number().int().min(1800).max(2100).optional(),
   tmdb_id: z.number().int().positive().optional(),
+  include_watch_providers: z.boolean().default(false),
+  watch_provider_regions: z.array(z.string()).optional(),
 });
 export type LookupMovieInput = z.infer<typeof LookupMovieInputSchema>;
 
