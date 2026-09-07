@@ -1,40 +1,12 @@
 # Agent Instructions
 
-This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
+This project tracks issues on GitHub Issues. `bd` (beads) was retired here per
+[cadence-groundwork#138](https://github.com/cameronsjo/cadence-groundwork/issues/138); any `.beads/` directory
+still present is dormant archived data, not a work queue — see `docs/beads-archive.md`.
 
-## Quick Reference
+## Session Completion
 
-```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --status in_progress  # Claim work
-bd close <id>         # Complete work
-bd sync               # Sync with git
-```
-
-## Landing the Plane (Session Completion)
-
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
-
-**MANDATORY WORKFLOW:**
-
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
-   ```bash
-   git pull --rebase
-   bd sync
-   git push
-   git status  # MUST show "up to date with origin"
-   ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
-
-**CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
-
+When ending a work session, wrap up normally: commit and push your changes,
+file GitHub issues for anything that needs follow-up, and confirm
+`git status` shows the branch pushed and up to date with origin. Sessions
+using Cadence tooling can run `cadence:outro` for this.
