@@ -73,28 +73,36 @@ describe('shared tool handlers', () => {
     });
     expect(execute.mock.calls).toEqual([
       ['example', undefined],
-      ['example', {}],
+      ['example', undefined],
     ]);
   });
 
-  it('sets the logging level in both adapters and preserves stdio announcement', async () => {
+  it('sets the logging level in both adapters and announces both changes', async () => {
     const { handlers, logger } = setup();
     const setLevel = vi.spyOn(logger, 'setLevel');
     const info = vi.spyOn(logger, 'info');
+    const emitted: Array<{ action?: unknown; level?: unknown }> = [];
+    logger.setEmitter((entry) => {
+      emitted.push(entry.data as { action?: unknown; level?: unknown });
+    });
     expect(handlers.setLevel('debug', true)).toEqual({});
     expect(
       await handlers.handleHttpRequest({
         jsonrpc: '2.0',
         id: 2,
         method: 'logging/setLevel',
-        params: { level: 'error' },
+        params: { level: 'debug' },
       })
     ).toEqual({ jsonrpc: '2.0', id: 2, result: {} });
-    expect(setLevel.mock.calls).toEqual([['debug'], ['error']]);
-    expect(info).toHaveBeenCalledExactlyOnceWith('main', {
-      action: 'log_level_changed',
-      level: 'debug',
-    });
+    expect(setLevel.mock.calls).toEqual([['debug'], ['debug']]);
+    expect(info.mock.calls).toEqual([
+      ['main', { action: 'log_level_changed', level: 'debug' }],
+      ['main', { action: 'log_level_changed', level: 'debug' }],
+    ]);
+    expect(emitted.map(({ action, level }) => ({ action, level }))).toEqual([
+      { action: 'log_level_changed', level: 'debug' },
+      { action: 'log_level_changed', level: 'debug' },
+    ]);
   });
 
   it('preserves HTTP initialization, ping and unknown-method envelopes', async () => {

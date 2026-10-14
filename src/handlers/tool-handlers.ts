@@ -57,12 +57,12 @@ export function createToolHandlers(
         break;
       case 'tools/call': {
         const params = request.params as { name: string; arguments?: unknown };
-        result = await callTool(params.name, params.arguments || {});
+        result = await callTool(params.name, params.arguments);
         break;
       }
       case 'logging/setLevel': {
         const params = request.params as { level: LogLevel };
-        result = setLevel(params.level);
+        result = setLevel(params.level, true);
         break;
       }
       case 'ping':

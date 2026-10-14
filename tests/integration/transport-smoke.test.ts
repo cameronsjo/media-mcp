@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -102,6 +102,29 @@ function childEnvironment(overrides: Record<string, string>): Record<string, str
   };
 }
 
+function ensureBuilt(): void {
+  if (existsSync(serverEntrypoint)) return;
+
+  try {
+    execFileSync('npm', ['run', 'build'], {
+      cwd: repoRoot,
+      env: process.env,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    const buildError = error as { status?: number; stdout?: string; stderr?: string };
+    throw new Error(
+      `Smoke test could not build ${serverEntrypoint} (exit ${buildError.status ?? 'unknown'}):\n` +
+        `${buildError.stdout ?? ''}${buildError.stderr ?? ''}`
+    );
+  }
+
+  if (!existsSync(serverEntrypoint)) {
+    throw new Error(`Smoke test build completed without creating ${serverEntrypoint}`);
+  }
+}
+
 function spawnHttpServer(port: number): SpawnedServer {
   const spawned: SpawnedServer = {
     child: spawn(process.execPath, [serverEntrypoint, '--transport', 'http'], {
@@ -203,7 +226,7 @@ async function waitForHttpInitialize(
 
 describe('built transport smoke test', () => {
   it('exposes the same tools over SDK stdio and HTTP JSON-RPC', async () => {
-    expect(existsSync(serverEntrypoint)).toBe(true);
+    ensureBuilt();
     const deadline = Date.now() + smokeTimeoutMs;
 
     const stdioTransport = new StdioClientTransport({
