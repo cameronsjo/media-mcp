@@ -93,6 +93,19 @@ describe('configuration', () => {
     ]);
   });
 
+  it('allows operation with only OpenLibrary available', () => {
+    vi.stubEnv('MCP_ENABLE_GOODREADS_SCRAPING', 'false');
+
+    const { config, sources } = loadConfig();
+
+    expect(config.tmdbApiKey).toBeUndefined();
+    expect(config.googleBooksApiKey).toBeUndefined();
+    expect(config.hardcoverApiKey).toBeUndefined();
+    expect(sources.filter((source) => source.available).map((source) => source.name)).toEqual([
+      'OpenLibrary',
+    ]);
+  });
+
   it('maps every supported environment override and marks all keyed sources available', () => {
     vi.stubEnv('TMDB_API_KEY', 'fake-tmdb-key');
     vi.stubEnv('GOOGLE_BOOKS_API_KEY', 'fake-google-key');
