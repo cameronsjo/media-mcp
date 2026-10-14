@@ -1,6 +1,6 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, statSync, utimesSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -102,8 +102,30 @@ function childEnvironment(overrides: Record<string, string>): Record<string, str
   };
 }
 
+function latestMtime(path: string): number {
+  const stat = statSync(path);
+  if (!stat.isDirectory()) return stat.mtimeMs;
+
+  return readdirSync(path, { withFileTypes: true }).reduce((latest, entry) => {
+    return Math.max(latest, latestMtime(resolve(path, entry.name)));
+  }, stat.mtimeMs);
+}
+
+function buildInputsAreNewer(): boolean {
+  if (!existsSync(serverEntrypoint)) return true;
+
+  const distMtime = statSync(serverEntrypoint).mtimeMs;
+  return [
+    resolve(repoRoot, 'src'),
+    resolve(repoRoot, 'package.json'),
+    resolve(repoRoot, 'tsconfig.json'),
+  ]
+    .filter((path) => existsSync(path))
+    .some((path) => latestMtime(path) > distMtime);
+}
+
 function ensureBuilt(): void {
-  if (existsSync(serverEntrypoint)) return;
+  if (!buildInputsAreNewer()) return;
 
   try {
     execFileSync('npm', ['run', 'build'], {
@@ -225,6 +247,21 @@ async function waitForHttpInitialize(
 }
 
 describe('built transport smoke test', () => {
+  it('rebuilds when source inputs are newer than the compiled entrypoint', () => {
+    ensureBuilt();
+    const sourcePath = resolve(repoRoot, 'src/index.ts');
+    const sourceStat = statSync(sourcePath);
+    const beforeBuild = statSync(serverEntrypoint);
+
+    utimesSync(sourcePath, sourceStat.atime, new Date(beforeBuild.mtimeMs + 1000));
+    try {
+      ensureBuilt();
+      expect(statSync(serverEntrypoint).mtimeMs).toBeGreaterThan(beforeBuild.mtimeMs);
+    } finally {
+      utimesSync(sourcePath, sourceStat.atime, sourceStat.mtime);
+    }
+  });
+
   it('exposes the same tools over SDK stdio and HTTP JSON-RPC', async () => {
     ensureBuilt();
     const deadline = Date.now() + smokeTimeoutMs;
