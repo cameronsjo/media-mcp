@@ -2,47 +2,11 @@ import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
 import { normalizeForComparison } from '../utils/strings.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
 import type { PartialBookData, BookSource } from '../types/book.js';
+import { GoogleBooksSearchResponseSchema, GoogleBooksVolumeSchema } from './response-schemas.js';
+import type { GoogleBooksSearchResponse, GoogleBooksVolume } from './response-schemas.js';
 
 const SOURCE: BookSource = 'google_books';
 const BASE_URL = 'https://www.googleapis.com/books/v1';
-
-interface GoogleBooksVolumeInfo {
-  title: string;
-  subtitle?: string;
-  authors?: string[];
-  publisher?: string;
-  publishedDate?: string;
-  description?: string;
-  industryIdentifiers?: {
-    type: string;
-    identifier: string;
-  }[];
-  pageCount?: number;
-  categories?: string[];
-  averageRating?: number;
-  ratingsCount?: number;
-  imageLinks?: {
-    smallThumbnail?: string;
-    thumbnail?: string;
-    small?: string;
-    medium?: string;
-    large?: string;
-  };
-  language?: string;
-  previewLink?: string;
-  infoLink?: string;
-}
-
-interface GoogleBooksVolume {
-  id: string;
-  volumeInfo: GoogleBooksVolumeInfo;
-}
-
-interface GoogleBooksSearchResponse {
-  kind: string;
-  totalItems: number;
-  items?: GoogleBooksVolume[];
-}
 
 export class GoogleBooksSource {
   private client: HttpClient;
@@ -104,17 +68,18 @@ export class GoogleBooksSource {
         return null;
       }
 
-      if (!response.data.items?.length) {
+      const data = GoogleBooksSearchResponseSchema.parse(response.data);
+      if (!data.items?.length) {
         this.logger.debug('google-books', {
           action: 'isbn_no_results',
           isbn: cleanISBN,
-          totalItems: response.data.totalItems,
+          totalItems: data.totalItems,
           message: 'Search returned 200 but zero items — book may not exist in Google Books',
         });
         return null;
       }
 
-      const result = this.buildPartialBookData(response.data.items[0]);
+      const result = this.buildPartialBookData(data.items[0]);
       this.cache.set(cacheKey, result, SOURCE, CacheTTL.BOOK_METADATA);
 
       return result;
@@ -177,19 +142,20 @@ export class GoogleBooksSource {
         return null;
       }
 
-      if (!response.data.items?.length) {
+      const data = GoogleBooksSearchResponseSchema.parse(response.data);
+      if (!data.items?.length) {
         this.logger.debug('google-books', {
           action: 'search_no_results',
           title,
           author,
-          totalItems: response.data.totalItems,
+          totalItems: data.totalItems,
           message: 'Search returned 200 but zero items',
         });
         return null;
       }
 
       // Find best match
-      const match = this.findBestMatch(response.data.items, title, author);
+      const match = this.findBestMatch(data.items, title, author);
       if (!match) {
         return null;
       }
@@ -229,7 +195,8 @@ export class GoogleBooksSource {
         return null;
       }
 
-      const result = this.buildPartialBookData(response.data);
+      const volume = GoogleBooksVolumeSchema.parse(response.data);
+      const result = this.buildPartialBookData(volume);
       this.cache.set(cacheKey, result, SOURCE, CacheTTL.BOOK_METADATA);
 
       return result;
@@ -339,5 +306,4 @@ export class GoogleBooksSource {
 
     return scored[0].score >= 50 ? scored[0].item : null;
   }
-
 }

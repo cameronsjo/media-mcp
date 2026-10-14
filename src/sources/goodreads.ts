@@ -4,6 +4,7 @@ import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
 import { delay } from '../utils/rate-limiter.js';
 import { normalizeShelf } from '../utils/strings.js';
 import type { PartialBookData, BookSource } from '../types/book.js';
+import { GoodreadsHTMLSchema } from './response-schemas.js';
 
 const SOURCE: BookSource = 'goodreads';
 const BASE_URL = 'https://www.goodreads.com';
@@ -105,7 +106,8 @@ export class GoodreadsSource {
         return null;
       }
 
-      const $ = cheerio.load(response.data as string);
+      const html = GoodreadsHTMLSchema.parse(response.data);
+      const $ = cheerio.load(html);
 
       // Find the first book link — use URL pattern (resilient to class name changes)
       const bookLink = $('a[href*="/book/show/"]').first().attr('href');
@@ -177,7 +179,8 @@ export class GoodreadsSource {
         return null;
       }
 
-      const $ = cheerio.load(response.data as string);
+      const html = GoodreadsHTMLSchema.parse(response.data);
+      const $ = cheerio.load(html);
 
       // Extract rating — try multiple selectors (modern → legacy)
       const ratingText =
@@ -350,7 +353,8 @@ export class GoodreadsSource {
         return null;
       }
 
-      const $ = cheerio.load(response.data as string);
+      const html = GoodreadsHTMLSchema.parse(response.data);
+      const $ = cheerio.load(html);
 
       // Extract series name
       const seriesName =

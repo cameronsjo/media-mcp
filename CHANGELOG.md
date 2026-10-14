@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ARM64 container image support
 - `.env.example` for onboarding
 - CONTRIBUTING guide and LICENSE file
+- Runtime validation for upstream media source responses
 
 ### Changed
 
