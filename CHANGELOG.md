@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Corrected extraction of series-prefixed book titles
+- Goodreads scraping now emits warning diagnostics when search or detail selectors produce no usable data.
 
 ### Added
 
@@ -20,10 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ARM64 container image support
 - `.env.example` for onboarding
 - CONTRIBUTING guide and LICENSE file
+- Runtime validation for upstream media source responses
 
 ### Changed
 
 - Consolidated CI workflows (merged test.yml into ci.yml)
+- Added periodic cleanup for expired cache entries
+- Reserve rate-limit slots before dispatching outbound requests.
 
 ## [1.0.0] - 2024-12-01
 

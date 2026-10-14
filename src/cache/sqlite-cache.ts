@@ -15,16 +15,19 @@ export interface CacheOptions {
   path: string;
   defaultTTLHours: number;
   enabled: boolean;
+  cleanupIntervalMs?: number;
 }
+
+export const DEFAULT_CACHE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
 // TTL presets in hours
 export const CacheTTL = {
-  BOOK_METADATA: 30 * 24,      // 30 days
-  SERIES_INFO: 7 * 24,         // 7 days
-  RATINGS: 24,                  // 24 hours
-  MOVIE_TV_METADATA: 7 * 24,   // 7 days
-  TV_EPISODES: 24,             // 1 day (active shows)
-  SEARCH_RESULTS: 1,           // 1 hour
+  BOOK_METADATA: 30 * 24, // 30 days
+  SERIES_INFO: 7 * 24, // 7 days
+  RATINGS: 24, // 24 hours
+  MOVIE_TV_METADATA: 7 * 24, // 7 days
+  TV_EPISODES: 24, // 1 day (active shows)
+  SEARCH_RESULTS: 1, // 1 hour
 } as const;
 
 export class SQLiteCache {
@@ -32,6 +35,7 @@ export class SQLiteCache {
   private enabled: boolean;
   private defaultTTLHours: number;
   private logger: Logger;
+  private cleanupTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(options: CacheOptions, logger: Logger) {
     this.enabled = options.enabled;
@@ -66,6 +70,18 @@ export class SQLiteCache {
     }
 
     this.initialize();
+    this.cleanupTimer = setInterval(() => {
+      try {
+        const deleted = this.cleanup('debug');
+        this.logger.debug('cache', { action: 'scheduled_cleanup', deleted });
+      } catch (error) {
+        this.logger.error('cache', {
+          action: 'scheduled_cleanup_failed',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }, options.cleanupIntervalMs ?? DEFAULT_CACHE_CLEANUP_INTERVAL_MS);
+    this.cleanupTimer.unref?.();
   }
 
   private initialize(): void {
@@ -94,7 +110,7 @@ export class SQLiteCache {
    */
   static makeKey(source: string, ...parts: (string | number | undefined)[]): string {
     const validParts = parts.filter((p): p is string | number => p !== undefined);
-    return `${source.toLowerCase()}:${validParts.map(p => String(p).toLowerCase().trim()).join(':')}`;
+    return `${source.toLowerCase()}:${validParts.map((p) => String(p).toLowerCase().trim()).join(':')}`;
   }
 
   /**
@@ -108,21 +124,27 @@ export class SQLiteCache {
       SELECT * FROM cache WHERE key = ? AND expires_at > ?
     `);
 
-    const row = stmt.get(key, now) as {
-      key: string;
-      value: string;
-      source: string;
-      created_at: number;
-      expires_at: number;
-      hit_count: number;
-    } | undefined;
+    const row = stmt.get(key, now) as
+      | {
+          key: string;
+          value: string;
+          source: string;
+          created_at: number;
+          expires_at: number;
+          hit_count: number;
+        }
+      | undefined;
 
     if (!row) return null;
 
     // Update hit count
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       UPDATE cache SET hit_count = hit_count + 1 WHERE key = ?
-    `).run(key);
+    `
+      )
+      .run(key);
 
     try {
       const value = JSON.parse(row.value) as T;
@@ -150,14 +172,16 @@ export class SQLiteCache {
     if (!this.enabled) return null;
 
     const stmt = this.db.prepare(`SELECT * FROM cache WHERE key = ?`);
-    const row = stmt.get(key) as {
-      key: string;
-      value: string;
-      source: string;
-      created_at: number;
-      expires_at: number;
-      hit_count: number;
-    } | undefined;
+    const row = stmt.get(key) as
+      | {
+          key: string;
+          value: string;
+          source: string;
+          created_at: number;
+          expires_at: number;
+          hit_count: number;
+        }
+      | undefined;
 
     if (!row) return null;
 
@@ -197,7 +221,12 @@ export class SQLiteCache {
     `);
 
     stmt.run(key, JSON.stringify(value), source, now, expires_at);
-    this.logger.debug('cache', { action: 'set', key, source, ttl_hours: ttlHours ?? this.defaultTTLHours });
+    this.logger.debug('cache', {
+      action: 'set',
+      key,
+      source,
+      ttl_hours: ttlHours ?? this.defaultTTLHours,
+    });
   }
 
   /**
@@ -220,11 +249,11 @@ export class SQLiteCache {
   /**
    * Clean up expired entries
    */
-  cleanup(): number {
+  cleanup(logLevel: 'info' | 'debug' = 'info'): number {
     if (!this.enabled) return 0;
     const result = this.db.prepare(`DELETE FROM cache WHERE expires_at < ?`).run(Date.now());
     if (result.changes > 0) {
-      this.logger.info('cache', { action: 'cleanup', deleted: result.changes });
+      this.logger[logLevel]('cache', { action: 'cleanup', deleted: result.changes });
     }
     return result.changes;
   }
@@ -237,20 +266,26 @@ export class SQLiteCache {
       return { total: 0, bySource: {}, hitRate: 0 };
     }
 
-    const total = this.db.prepare(`SELECT COUNT(*) as count FROM cache WHERE expires_at > ?`)
+    const total = this.db
+      .prepare(`SELECT COUNT(*) as count FROM cache WHERE expires_at > ?`)
       .get(Date.now()) as { count: number };
 
-    const bySourceRows = this.db.prepare(`
+    const bySourceRows = this.db
+      .prepare(
+        `
       SELECT source, COUNT(*) as count FROM cache WHERE expires_at > ? GROUP BY source
-    `).all(Date.now()) as { source: string; count: number }[];
+    `
+      )
+      .all(Date.now()) as { source: string; count: number }[];
 
     const bySource: Record<string, number> = {};
     for (const row of bySourceRows) {
       bySource[row.source] = row.count;
     }
 
-    const hits = this.db.prepare(`SELECT SUM(hit_count) as total FROM cache`)
-      .get() as { total: number | null };
+    const hits = this.db.prepare(`SELECT SUM(hit_count) as total FROM cache`).get() as {
+      total: number | null;
+    };
 
     return {
       total: total.count,
@@ -268,15 +303,16 @@ export class SQLiteCache {
       return { lookups_total: 0, cache_hit_pct: 0, cache_size_bytes: 0 };
     }
 
-    const hits = this.db.prepare('SELECT COALESCE(SUM(hit_count), 0) as total FROM cache')
+    const hits = this.db
+      .prepare('SELECT COALESCE(SUM(hit_count), 0) as total FROM cache')
       .get() as { total: number };
-    const entries = this.db.prepare('SELECT COUNT(*) as count FROM cache')
-      .get() as { count: number };
+    const entries = this.db.prepare('SELECT COUNT(*) as count FROM cache').get() as {
+      count: number;
+    };
 
     const lookups_total = hits.total + entries.count;
-    const cache_hit_pct = lookups_total > 0
-      ? Math.round((hits.total / lookups_total) * 1000) / 10
-      : 0;
+    const cache_hit_pct =
+      lookups_total > 0 ? Math.round((hits.total / lookups_total) * 1000) / 10 : 0;
 
     let cache_size_bytes = 0;
     const dbPath = this.db.name;
@@ -295,6 +331,11 @@ export class SQLiteCache {
    * Close the database connection
    */
   close(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
+    }
+
     try {
       this.db.close();
     } catch (error) {

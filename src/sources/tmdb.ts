@@ -3,158 +3,29 @@ import { normalizeForComparison } from '../utils/strings.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
 import type { MovieResult, CastMember, MovieCollection } from '../types/movie.js';
 import type { TVResult, Season, Episode, TVStatus } from '../types/tv.js';
+import {
+  TMDBCollectionDetailsSchema,
+  TMDBMovieCreditsSchema,
+  TMDBMovieDetailsSchema,
+  TMDBSearchResponseSchema,
+  TMDBSeasonDetailsSchema,
+  TMDBTVDetailsSchema,
+  TMDBWatchProvidersSchema,
+} from './response-schemas.js';
+import type {
+  TMDBCollectionDetails,
+  TMDBMovieCredits,
+  TMDBMovieDetails,
+  TMDBSearchResponse,
+  TMDBSearchResult,
+  TMDBSeasonDetails,
+  TMDBTVDetails,
+  TMDBWatchProviders,
+} from './response-schemas.js';
 
 const SOURCE = 'tmdb';
 const BASE_URL = 'https://api.themoviedb.org/3';
 const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p';
-
-// TMDB API response types
-interface TMDBGenre {
-  id: number;
-  name: string;
-}
-
-interface TMDBProductionCompany {
-  id: number;
-  name: string;
-  logo_path: string | null;
-  origin_country: string;
-}
-
-interface TMDBCrewMember {
-  id: number;
-  name: string;
-  job: string;
-  department: string;
-}
-
-interface TMDBCastMember {
-  id: number;
-  name: string;
-  character: string;
-  order: number;
-}
-
-interface TMDBMovieDetails {
-  id: number;
-  title: string;
-  original_title: string;
-  release_date: string;
-  runtime: number;
-  genres: TMDBGenre[];
-  overview: string;
-  tagline: string;
-  poster_path: string | null;
-  backdrop_path: string | null;
-  vote_average: number;
-  vote_count: number;
-  imdb_id: string | null;
-  belongs_to_collection: {
-    id: number;
-    name: string;
-    poster_path: string | null;
-    backdrop_path: string | null;
-  } | null;
-  production_companies: TMDBProductionCompany[];
-}
-
-interface TMDBMovieCredits {
-  cast: TMDBCastMember[];
-  crew: TMDBCrewMember[];
-}
-
-interface TMDBWatchProvider {
-  logo_path: string;
-  provider_id: number;
-  provider_name: string;
-  display_priority: number;
-}
-
-interface TMDBWatchProviders {
-  results: Record<string, {
-    link: string;
-    flatrate?: TMDBWatchProvider[];
-    rent?: TMDBWatchProvider[];
-    buy?: TMDBWatchProvider[];
-  }>;
-}
-
-interface TMDBCollectionDetails {
-  id: number;
-  name: string;
-  overview: string;
-  poster_path: string | null;
-  backdrop_path: string | null;
-  parts: {
-    id: number;
-    title: string;
-    release_date: string;
-  }[];
-}
-
-interface TMDBSearchResult {
-  id: number;
-  title?: string;
-  name?: string;
-  release_date?: string;
-  first_air_date?: string;
-  vote_average: number;
-  popularity: number;
-}
-
-interface TMDBSearchResponse {
-  page: number;
-  total_results: number;
-  total_pages: number;
-  results: TMDBSearchResult[];
-}
-
-interface TMDBTVDetails {
-  id: number;
-  name: string;
-  original_name: string;
-  first_air_date: string;
-  last_air_date: string | null;
-  status: string;
-  genres: TMDBGenre[];
-  overview: string;
-  tagline: string;
-  poster_path: string | null;
-  backdrop_path: string | null;
-  vote_average: number;
-  vote_count: number;
-  created_by: { id: number; name: string }[];
-  networks: { id: number; name: string }[];
-  episode_run_time: number[];
-  number_of_seasons: number;
-  number_of_episodes: number;
-  seasons: {
-    id: number;
-    season_number: number;
-    name: string;
-    episode_count: number;
-    air_date: string | null;
-  }[];
-  external_ids?: {
-    imdb_id: string | null;
-    tvdb_id: number | null;
-  };
-}
-
-interface TMDBSeasonDetails {
-  id: number;
-  season_number: number;
-  name: string;
-  air_date: string | null;
-  episodes: {
-    id: number;
-    episode_number: number;
-    name: string;
-    air_date: string | null;
-    runtime: number | null;
-    overview: string;
-  }[];
-}
 
 export class TMDBSource {
   private client: HttpClient;
@@ -162,12 +33,7 @@ export class TMDBSource {
   private logger: Logger;
   private authMode: string;
 
-  constructor(
-    apiKey: string,
-    cache: SQLiteCache,
-    logger: Logger,
-    rateLimiter: RateLimiter
-  ) {
+  constructor(apiKey: string, cache: SQLiteCache, logger: Logger, rateLimiter: RateLimiter) {
     this.cache = cache;
     this.logger = logger;
 
@@ -252,13 +118,15 @@ export class TMDBSource {
         return null;
       }
 
+      const data = TMDBSearchResponseSchema.parse(response.data);
+
       // ...but a successful search that simply matched nothing is not.
-      if (response.data.total_results === 0) {
+      if (data.total_results === 0) {
         return null;
       }
 
       // Find best match
-      const match = this.findBestMovieMatch(response.data.results, title, year);
+      const match = this.findBestMovieMatch(data.results, title, year);
       if (!match) return null;
 
       this.cache.set(cacheKey, match.id, SOURCE, CacheTTL.SEARCH_RESULTS);
@@ -299,29 +167,59 @@ export class TMDBSource {
         return null;
       }
 
-      const details = detailsRes.data;
-      const credits = creditsRes.status === 200 ? creditsRes.data : null;
-      const providers = providersRes.status === 200 ? providersRes.data : null;
+      const details = TMDBMovieDetailsSchema.parse(detailsRes.data);
+      let parsedCredits: TMDBMovieCredits | null = null;
+      let enrichmentValidationFailed = false;
+      if (creditsRes.status === 200) {
+        const credits = TMDBMovieCreditsSchema.safeParse(creditsRes.data);
+        if (credits.success) {
+          parsedCredits = credits.data;
+        } else {
+          enrichmentValidationFailed = true;
+          this.logger.warning('tmdb', {
+            action: 'response_validation_failed',
+            endpoint: `/movie/${tmdbId}/credits`,
+            issues: credits.error.issues.map((issue) => ({
+              path: issue.path.join('.'),
+              message: issue.message,
+            })),
+          });
+        }
+      }
+
+      let parsedProviders: TMDBWatchProviders | null = null;
+      if (providersRes.status === 200) {
+        const providers = TMDBWatchProvidersSchema.safeParse(providersRes.data);
+        if (providers.success) {
+          parsedProviders = providers.data;
+        } else {
+          enrichmentValidationFailed = true;
+          this.logger.warning('tmdb', {
+            action: 'response_validation_failed',
+            endpoint: `/movie/${tmdbId}/watch/providers`,
+            issues: providers.error.issues.map((issue) => ({
+              path: issue.path.join('.'),
+              message: issue.message,
+            })),
+          });
+        }
+      }
 
       // Get collection details if part of a collection
       let collection: MovieCollection = { name: null, position: null, total_films: null };
       if (details.belongs_to_collection) {
-        collection = await this.getCollectionPosition(
-          details.belongs_to_collection.id,
-          tmdbId
-        );
+        collection = await this.getCollectionPosition(details.belongs_to_collection.id, tmdbId);
       }
 
       // Build result
-      const directors = credits?.crew
-        .filter(c => c.job === 'Director')
-        .map(c => c.name) ?? [];
+      const directors =
+        parsedCredits?.crew.filter((c) => c.job === 'Director').map((c) => c.name) ?? [];
 
-      const cast: CastMember[] = credits?.cast
-        .slice(0, 10)
-        .map(c => ({ name: c.name, character: c.character })) ?? [];
+      const cast: CastMember[] =
+        parsedCredits?.cast.slice(0, 10).map((c) => ({ name: c.name, character: c.character })) ??
+        [];
 
-      const watchProviders = this.buildWatchProviders(providers);
+      const watchProviders = this.buildWatchProviders(parsedProviders);
 
       const result: MovieResult = {
         title: details.title,
@@ -332,7 +230,7 @@ export class TMDBSource {
         })(),
         release_date: details.release_date,
         runtime_minutes: details.runtime || 0,
-        genres: details.genres.map(g => g.name),
+        genres: details.genres.map((g) => g.name),
         description: details.overview,
         tagline: details.tagline || null,
         poster_url: this.getImageUrl(details.poster_path, 'w500'),
@@ -363,7 +261,9 @@ export class TMDBSource {
         },
       };
 
-      this.cache.set(cacheKey, result, SOURCE, CacheTTL.MOVIE_TV_METADATA);
+      if (!enrichmentValidationFailed) {
+        this.cache.set(cacheKey, result, SOURCE, CacheTTL.MOVIE_TV_METADATA);
+      }
       return result;
     } catch (error) {
       this.logger.error('tmdb', {
@@ -403,13 +303,15 @@ export class TMDBSource {
         return null;
       }
 
+      const data = TMDBSearchResponseSchema.parse(response.data);
+
       // ...but a successful search that simply matched nothing is not.
-      if (response.data.total_results === 0) {
+      if (data.total_results === 0) {
         return null;
       }
 
       // Find best match
-      const match = this.findBestTVMatch(response.data.results, title, year);
+      const match = this.findBestTVMatch(data.results, title, year);
       if (!match) return null;
 
       this.cache.set(cacheKey, match.id, SOURCE, CacheTTL.SEARCH_RESULTS);
@@ -455,25 +357,21 @@ export class TMDBSource {
         return null;
       }
 
-      const details = response.data;
+      const details = TMDBTVDetailsSchema.parse(response.data);
 
       // Build seasons array
       let seasons: Season[] = [];
       if (includeSeasons) {
-        seasons = await this.buildSeasons(
-          tmdbId,
-          details.seasons,
-          includeEpisodes
-        );
+        seasons = await this.buildSeasons(tmdbId, details.seasons, includeEpisodes);
       }
 
       // Map status
       const statusMap: Record<string, TVStatus> = {
         'Returning Series': 'Returning Series',
-        'Ended': 'Ended',
-        'Canceled': 'Canceled',
+        Ended: 'Ended',
+        Canceled: 'Canceled',
         'In Production': 'In Production',
-        'Planned': 'Planned',
+        Planned: 'Planned',
       };
 
       const result: TVResult = {
@@ -482,13 +380,13 @@ export class TMDBSource {
         first_air_date: details.first_air_date,
         last_air_date: details.last_air_date,
         status: statusMap[details.status] ?? 'Ended',
-        genres: details.genres.map(g => g.name),
+        genres: details.genres.map((g) => g.name),
         description: details.overview,
         tagline: details.tagline || null,
         poster_url: this.getImageUrl(details.poster_path, 'w500'),
         backdrop_url: this.getImageUrl(details.backdrop_path, 'w1280'),
-        created_by: details.created_by.map(c => c.name),
-        networks: details.networks.map(n => n.name),
+        created_by: details.created_by.map((c) => c.name),
+        networks: details.networks.map((n) => n.name),
         episode_runtime: details.episode_run_time[0] ?? null,
         total_seasons: details.number_of_seasons,
         total_episodes: details.number_of_episodes,
@@ -516,9 +414,8 @@ export class TMDBSource {
       };
 
       // Use shorter TTL for active shows
-      const ttl = details.status === 'Returning Series'
-        ? CacheTTL.TV_EPISODES
-        : CacheTTL.MOVIE_TV_METADATA;
+      const ttl =
+        details.status === 'Returning Series' ? CacheTTL.TV_EPISODES : CacheTTL.MOVIE_TV_METADATA;
 
       this.cache.set(cacheKey, result, SOURCE, ttl);
       return result;
@@ -542,7 +439,7 @@ export class TMDBSource {
     includeEpisodes: boolean
   ): Promise<Season[]> {
     // Filter out specials (season 0)
-    const regularSeasons = basicSeasons.filter(s => s.season_number !== 0);
+    const regularSeasons = basicSeasons.filter((s) => s.season_number !== 0);
 
     // Build seasons in parallel
     const seasonPromises = regularSeasons.map(async (s) => {
@@ -551,7 +448,7 @@ export class TMDBSource {
       if (includeEpisodes) {
         const seasonDetails = await this.getSeasonDetails(tvId, s.season_number);
         if (seasonDetails) {
-          episodes = seasonDetails.episodes.map(e => ({
+          episodes = seasonDetails.episodes.map((e) => ({
             episode_number: e.episode_number,
             name: e.name,
             air_date: e.air_date,
@@ -596,8 +493,9 @@ export class TMDBSource {
         return null;
       }
 
-      this.cache.set(cacheKey, response.data, SOURCE, CacheTTL.TV_EPISODES);
-      return response.data;
+      const data = TMDBSeasonDetailsSchema.parse(response.data);
+      this.cache.set(cacheKey, data, SOURCE, CacheTTL.TV_EPISODES);
+      return data;
     } catch {
       return null;
     }
@@ -622,7 +520,7 @@ export class TMDBSource {
         );
 
         if (response.status === 200) {
-          collection = response.data;
+          collection = TMDBCollectionDetailsSchema.parse(response.data);
           this.cache.set(cacheKey, collection, SOURCE, CacheTTL.MOVIE_TV_METADATA);
         }
       } catch {
@@ -636,10 +534,10 @@ export class TMDBSource {
 
     // Sort parts by release date to find position
     const sortedParts = collection.parts
-      .filter(p => p.release_date)
+      .filter((p) => p.release_date)
       .sort((a, b) => a.release_date.localeCompare(b.release_date));
 
-    const position = sortedParts.findIndex(p => p.id === movieId) + 1;
+    const position = sortedParts.findIndex((p) => p.id === movieId) + 1;
 
     return {
       name: collection.name,
@@ -660,9 +558,9 @@ export class TMDBSource {
 
     for (const [region, data] of Object.entries(providers.results)) {
       result[region] = {
-        stream: data.flatrate?.map(p => p.provider_name),
-        rent: data.rent?.map(p => p.provider_name),
-        buy: data.buy?.map(p => p.provider_name),
+        stream: data.flatrate?.map((p) => p.provider_name),
+        rent: data.rent?.map((p) => p.provider_name),
+        buy: data.buy?.map((p) => p.provider_name),
       };
     }
 
@@ -672,10 +570,7 @@ export class TMDBSource {
   /**
    * Build image URL from path
    */
-  private getImageUrl(
-    path: string | null,
-    size: string = 'original'
-  ): string | null {
+  private getImageUrl(path: string | null, size: string = 'original'): string | null {
     if (!path) return null;
     return `${IMAGE_BASE_URL}/${size}${path}`;
   }
@@ -692,7 +587,7 @@ export class TMDBSource {
 
     const normalizedTitle = normalizeForComparison(title);
 
-    const scored = results.map(r => {
+    const scored = results.map((r) => {
       let score = 0;
 
       // Title match
@@ -738,7 +633,7 @@ export class TMDBSource {
 
     const normalizedTitle = normalizeForComparison(title);
 
-    const scored = results.map(r => {
+    const scored = results.map((r) => {
       let score = 0;
 
       // Title match

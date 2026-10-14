@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { RateLimiter, delay } from '../../src/utils/rate-limiter.js';
 import { Logger } from '../../src/utils/logger.js';
 
@@ -66,6 +66,24 @@ describe('RateLimiter', () => {
 
       expect(rateLimiter.canRequest('test')).toBe(false);
     });
+
+    it('resets an expired window before recording without a prior canRequest check', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(0));
+
+      try {
+        rateLimiter.configure('test', { requestsPerWindow: 2, windowMs: 1000 });
+        rateLimiter.recordRequest('test');
+        rateLimiter.recordRequest('test');
+
+        vi.advanceTimersByTime(1000);
+        rateLimiter.recordRequest('test');
+
+        expect(rateLimiter.canRequest('test')).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('triggerBackoff', () => {
@@ -113,33 +131,146 @@ describe('RateLimiter', () => {
 
   describe('waitForSlot', () => {
     it('should resolve immediately when under limit', async () => {
+      vi.useFakeTimers();
       rateLimiter.configure('test', { requestsPerWindow: 10, windowMs: 1000 });
 
-      const start = Date.now();
-      await rateLimiter.waitForSlot('test');
-      const duration = Date.now() - start;
+      try {
+        await expect(rateLimiter.waitForSlot('test')).resolves.toBeUndefined();
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 
-      expect(duration).toBeLessThan(50);
+  describe('acquireSlot', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(0));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('does not shorten an existing backoff when a concurrent lower attempt signals', async () => {
+      rateLimiter.configure('test', { requestsPerWindow: 10, windowMs: 10000 });
+      expect(rateLimiter.triggerBackoff('test', 3)).toBe(8000);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(rateLimiter.triggerBackoff('test', 1)).toBe(2000);
+      expect(rateLimiter.getWaitTime('test')).toBe(7000);
+
+      let acquired = false;
+      const slot = rateLimiter.acquireSlot('test').then(() => {
+        acquired = true;
+      });
+      await vi.advanceTimersByTimeAsync(6999);
+      expect(acquired).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await slot;
+      expect(acquired).toBe(true);
+    });
+
+    it('reserves slots before concurrent callers continue', async () => {
+      rateLimiter.configure('test', { requestsPerWindow: 2, windowMs: 1000 });
+
+      const first = rateLimiter.acquireSlot('test');
+      const second = rateLimiter.acquireSlot('test');
+      const third = rateLimiter.acquireSlot('test');
+
+      await Promise.all([first, second]);
+      expect(rateLimiter.canRequest('test')).toBe(false);
+
+      let thirdResolved = false;
+      void third.then(() => {
+        thirdResolved = true;
+      });
+      await vi.advanceTimersByTimeAsync(999);
+      expect(thirdResolved).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await third;
+      expect(thirdResolved).toBe(true);
+      expect(rateLimiter.canRequest('test')).toBe(true);
+    });
+
+    it('allows successive fixed windows without double counting', async () => {
+      rateLimiter.configure('test', { requestsPerWindow: 2, windowMs: 1000 });
+
+      const requests = [1, 2, 3, 4, 5].map(() => rateLimiter.acquireSlot('test'));
+      await Promise.all(requests.slice(0, 2));
+      expect(rateLimiter.canRequest('test')).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      await Promise.all(requests.slice(2, 4));
+      expect(rateLimiter.canRequest('test')).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      await requests[4];
+      expect(rateLimiter.canRequest('test')).toBe(true);
+    });
+
+    it('rechecks the window after a backoff sleep', async () => {
+      rateLimiter.configure('test', { requestsPerWindow: 1, windowMs: 1000 });
+
+      await rateLimiter.acquireSlot('test');
+      rateLimiter.triggerBackoff('test', 1);
+      const nextRequest = rateLimiter.acquireSlot('test');
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(rateLimiter.canRequest('test')).toBe(false);
+      let nextResolved = false;
+      void nextRequest.then(() => {
+        nextResolved = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(999);
+      expect(nextResolved).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await nextRequest;
+      expect(nextResolved).toBe(true);
+      expect(rateLimiter.canRequest('test')).toBe(false);
     });
   });
 });
 
 describe('delay', () => {
-  it('should delay for specified milliseconds', async () => {
-    const start = Date.now();
-    await delay(100);
-    const duration = Date.now() - start;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(0));
+  });
 
-    expect(duration).toBeGreaterThanOrEqual(95);
-    expect(duration).toBeLessThan(150);
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('should delay for specified milliseconds', async () => {
+    const delayed = delay(100);
+    await vi.advanceTimersByTimeAsync(99);
+    let resolved = false;
+    void delayed.then(() => {
+      resolved = true;
+    });
+
+    expect(resolved).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await delayed;
+    expect(resolved).toBe(true);
   });
 
   it('should delay for random duration in range', async () => {
-    const start = Date.now();
-    await delay(50, 100);
-    const duration = Date.now() - start;
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const delayed = delay(50, 100);
+    await vi.advanceTimersByTimeAsync(74);
+    let resolved = false;
+    void delayed.then(() => {
+      resolved = true;
+    });
 
-    expect(duration).toBeGreaterThanOrEqual(45);
-    expect(duration).toBeLessThan(150);
+    expect(resolved).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await delayed;
+    expect(resolved).toBe(true);
   });
 });
