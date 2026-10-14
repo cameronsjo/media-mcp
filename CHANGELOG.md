@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Consolidated CI workflows (merged test.yml into ci.yml)
+- HTTP `logging/setLevel` now announces `log_level_changed`, matching stdio; omitted `tools/call` arguments now reach `executeToolCall` as `undefined` instead of `{}`.
 - Added periodic cleanup for expired cache entries
 - Reserve rate-limit slots before dispatching outbound requests.
 

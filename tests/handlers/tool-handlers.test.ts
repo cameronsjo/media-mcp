@@ -62,7 +62,7 @@ describe('shared tool handlers', () => {
     ]);
   });
 
-  it('preserves absent-argument behavior in each transport', async () => {
+  it('passes undefined for absent tool arguments in both transports', async () => {
     const { handlers, execute } = setup();
     await handlers.callTool('example', undefined);
     await handlers.handleHttpRequest({
