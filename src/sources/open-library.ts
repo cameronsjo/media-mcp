@@ -2,57 +2,21 @@ import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
 import { normalizeForComparison } from '../utils/strings.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
 import type { PartialBookData, BookSource } from '../types/book.js';
+import {
+  OpenLibraryISBNResponseSchema,
+  OpenLibrarySearchResponseSchema,
+  OpenLibraryWorkResponseSchema,
+} from './response-schemas.js';
+import type {
+  OpenLibraryISBNResponse,
+  OpenLibrarySearchDoc,
+  OpenLibrarySearchResponse,
+  OpenLibraryWorkResponse,
+} from './response-schemas.js';
 
 const SOURCE: BookSource = 'open_library';
 const BASE_URL = 'https://openlibrary.org';
 const COVERS_URL = 'https://covers.openlibrary.org';
-
-interface OpenLibrarySearchDoc {
-  key: string;
-  title: string;
-  author_name?: string[];
-  author_key?: string[];
-  first_publish_year?: number;
-  isbn?: string[];
-  publisher?: string[];
-  subject?: string[];
-  number_of_pages_median?: number;
-  cover_i?: number;
-  ratings_average?: number;
-  ratings_count?: number;
-}
-
-interface OpenLibrarySearchResponse {
-  numFound: number;
-  start: number;
-  docs: OpenLibrarySearchDoc[];
-}
-
-interface OpenLibraryWorkResponse {
-  title: string;
-  description?: string | { value: string };
-  subjects?: string[];
-  subject_places?: string[];
-  subject_people?: string[];
-  subject_times?: string[];
-  covers?: number[];
-}
-
-interface OpenLibraryEditionResponse {
-  title: string;
-  publishers?: string[];
-  publish_date?: string;
-  number_of_pages?: number;
-  isbn_10?: string[];
-  isbn_13?: string[];
-  covers?: number[];
-  description?: string | { value: string };
-}
-
-interface OpenLibraryISBNResponse extends OpenLibraryEditionResponse {
-  works?: { key: string }[];
-  authors?: { key: string }[];
-}
 
 export class OpenLibrarySource {
   private client: HttpClient;
@@ -69,12 +33,7 @@ export class OpenLibrarySource {
       windowMs: 60000, // 100 requests per minute
     });
 
-    this.client = new HttpClient(
-      SOURCE,
-      { baseUrl: BASE_URL },
-      logger,
-      rateLimiter
-    );
+    this.client = new HttpClient(SOURCE, { baseUrl: BASE_URL }, logger, rateLimiter);
   }
 
   /**
@@ -91,9 +50,7 @@ export class OpenLibrarySource {
     }
 
     try {
-      const response = await this.client.get<OpenLibraryISBNResponse>(
-        `/isbn/${cleanISBN}.json`
-      );
+      const response = await this.client.get<OpenLibraryISBNResponse>(`/isbn/${cleanISBN}.json`);
 
       if (response.status !== 200) {
         this.logger.debug('open-library', {
@@ -103,7 +60,7 @@ export class OpenLibrarySource {
         return null;
       }
 
-      const data = response.data;
+      const data = OpenLibraryISBNResponseSchema.parse(response.data);
       const result = await this.buildPartialBookData(data, cleanISBN);
 
       // Cache the result
@@ -123,10 +80,7 @@ export class OpenLibrarySource {
   /**
    * Search for a book by title and author
    */
-  async searchByTitleAuthor(
-    title: string,
-    author?: string
-  ): Promise<PartialBookData | null> {
+  async searchByTitleAuthor(title: string, author?: string): Promise<PartialBookData | null> {
     const cacheKey = SQLiteCache.makeKey(SOURCE, 'search', title, author);
 
     // Check cache
@@ -142,18 +96,26 @@ export class OpenLibrarySource {
         query += ` author:${author}`;
       }
 
-      const response = await this.client.get<OpenLibrarySearchResponse>(
-        '/search.json',
-        {
-          params: {
-            q: query,
-            limit: 5,
-            fields: 'key,title,author_name,author_key,first_publish_year,isbn,publisher,subject,number_of_pages_median,cover_i,ratings_average,ratings_count',
-          },
-        }
-      );
+      const response = await this.client.get<OpenLibrarySearchResponse>('/search.json', {
+        params: {
+          q: query,
+          limit: 5,
+          fields:
+            'key,title,author_name,author_key,first_publish_year,isbn,publisher,subject,number_of_pages_median,cover_i,ratings_average,ratings_count',
+        },
+      });
 
-      if (response.status !== 200 || response.data.numFound === 0) {
+      if (response.status !== 200) {
+        this.logger.debug('open-library', {
+          action: 'search_no_results',
+          title,
+          author,
+        });
+        return null;
+      }
+
+      const data = OpenLibrarySearchResponseSchema.parse(response.data);
+      if (data.numFound === 0) {
         this.logger.debug('open-library', {
           action: 'search_no_results',
           title,
@@ -163,7 +125,7 @@ export class OpenLibrarySource {
       }
 
       // Find best match
-      const doc = this.findBestMatch(response.data.docs, title, author);
+      const doc = this.findBestMatch(data.docs, title, author);
       if (!doc) {
         return null;
       }
@@ -200,19 +162,16 @@ export class OpenLibrarySource {
     }
 
     try {
-      const response = await this.client.get<OpenLibraryWorkResponse>(
-        `${workKey}.json`
-      );
+      const response = await this.client.get<OpenLibraryWorkResponse>(`${workKey}.json`);
 
       if (response.status !== 200) {
         return null;
       }
 
-      const data = response.data;
+      const data = OpenLibraryWorkResponseSchema.parse(response.data);
       const result = {
-        description: typeof data.description === 'string'
-          ? data.description
-          : data.description?.value,
+        description:
+          typeof data.description === 'string' ? data.description : data.description?.value,
         subjects: data.subjects?.slice(0, 20),
       };
 
@@ -253,7 +212,7 @@ export class OpenLibrarySource {
     const normalizedAuthor = author ? normalizeForComparison(author) : null;
 
     // Score each document
-    const scored = docs.map(doc => {
+    const scored = docs.map((doc) => {
       let score = 0;
 
       // Title similarity
@@ -266,10 +225,12 @@ export class OpenLibrarySource {
 
       // Author match
       if (normalizedAuthor && doc.author_name) {
-        const docAuthors = doc.author_name.map(a => normalizeForComparison(a));
-        if (docAuthors.some(a => a === normalizedAuthor)) {
+        const docAuthors = doc.author_name.map((a) => normalizeForComparison(a));
+        if (docAuthors.some((a) => a === normalizedAuthor)) {
           score += 80;
-        } else if (docAuthors.some(a => a.includes(normalizedAuthor) || normalizedAuthor.includes(a))) {
+        } else if (
+          docAuthors.some((a) => a.includes(normalizedAuthor) || normalizedAuthor.includes(a))
+        ) {
           score += 40;
         }
       }
@@ -315,9 +276,8 @@ export class OpenLibrarySource {
 
     // Use edition description as fallback
     if (!description && data.description) {
-      description = typeof data.description === 'string'
-        ? data.description
-        : data.description.value;
+      description =
+        typeof data.description === 'string' ? data.description : data.description.value;
     }
 
     return {
@@ -341,8 +301,8 @@ export class OpenLibrarySource {
    */
   private buildPartialBookDataFromSearch(doc: OpenLibrarySearchDoc): PartialBookData {
     const isbns = doc.isbn ?? [];
-    const isbn10 = isbns.find(i => i.length === 10);
-    const isbn13 = isbns.find(i => i.length === 13);
+    const isbn10 = isbns.find((i) => i.length === 10);
+    const isbn13 = isbns.find((i) => i.length === 13);
 
     return {
       title: doc.title,
@@ -355,9 +315,10 @@ export class OpenLibrarySource {
       page_count: doc.number_of_pages_median ?? null,
       cover_url: this.getCoverUrl(doc.cover_i),
       subjects: doc.subject?.slice(0, 20) ?? [],
-      rating: doc.ratings_average && doc.ratings_count
-        ? { score: doc.ratings_average, count: doc.ratings_count }
-        : undefined,
+      rating:
+        doc.ratings_average && doc.ratings_count
+          ? { score: doc.ratings_average, count: doc.ratings_count }
+          : undefined,
       identifier: doc.key?.replace('/works/', ''),
       source_url: this.getSourceUrl(doc.key),
       source: SOURCE,

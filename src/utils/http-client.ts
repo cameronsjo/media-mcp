@@ -141,8 +141,8 @@ export class HttpClient {
 
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        // Wait for rate limit slot
-        await this.rateLimiter.waitForSlot(this.source);
+        // Reserve a rate limit slot before dispatching network work.
+        await this.rateLimiter.acquireSlot(this.source);
 
         const startTime = Date.now();
 
@@ -151,15 +151,13 @@ export class HttpClient {
           headers: {
             ...this.headers,
             ...extraHeaders,
-            'Accept': 'application/json',
+            Accept: 'application/json',
             ...(body ? { 'Content-Type': 'application/json' } : {}),
           },
           body: body ? JSON.stringify(body) : undefined,
           bodyTimeout: this.timeout,
           headersTimeout: this.timeout,
         });
-
-        this.rateLimiter.recordRequest(this.source);
 
         const responseBody = await response.body.text();
         const duration = Date.now() - startTime;

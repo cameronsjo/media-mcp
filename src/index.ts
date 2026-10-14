@@ -69,6 +69,7 @@ const config = {
     enabled: appConfig.cacheEnabled,
     path: appConfig.cachePath,
     defaultTTLHours: Math.floor(appConfig.cacheTtlBooks / 3600),
+    cleanupIntervalMs: appConfig.cacheCleanupIntervalMs,
   } as CacheOptions,
   logging: {
     level: appConfig.logLevel as LogLevel,
@@ -112,6 +113,7 @@ Environment Variables:
     MCP_CACHE_TTL_BOOKS           Book cache TTL in seconds (default: 604800)
     MCP_CACHE_TTL_MOVIES          Movie cache TTL in seconds (default: 86400)
     MCP_CACHE_TTL_TV              TV cache TTL in seconds (default: 86400)
+    MCP_CACHE_CLEANUP_INTERVAL_MS Expired-entry cleanup interval in milliseconds (default: 3600000)
 
   Rate Limiting:
     MCP_RATE_LIMIT_RPM            Requests per minute (default: 30)

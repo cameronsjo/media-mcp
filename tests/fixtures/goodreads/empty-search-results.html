@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Search results | Goodreads</title>
+  </head>
+  <body>
+    <div class="mainContentContainer">
+      <div class="mainContent">
+        <div class="mainContentFloat">
+          <div class="leftContainer">
+            <h1>Search</h1>
+            <form
+              name="searchForm"
+              class="searchBox searchBox--large"
+              action="/search"
+              method="get"
+            >
+              <input id="search_query_main" name="q" value="an unavailable title" />
+              <input type="hidden" name="search_type" value="books" />
+            </form>
+            <div class="stacked">
+              <div class="tabs mediumTabs">
+                <span id="booksLink" class="selectedTab">Books</span>
+              </div>
+            </div>
+            <h3 class="searchSubNavContainer">No results.</h3>
+            <div class="mediumText">Looking for a book?</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
