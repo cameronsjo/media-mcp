@@ -153,31 +153,34 @@ export function extractSeriesFromTitle(title: string): {
   seriesPosition: number | null;
 } {
   // Common series patterns
-  const patterns = [
+  const patterns: Array<{ pattern: RegExp; seriesPrefix?: boolean }> = [
     // "(Series Name #1)" or "(Series Name, #1)"
-    /^(.+?)\s*\(\s*(.+?)\s*[,#]\s*(\d+(?:\.\d+)?)\s*\)$/,
+    { pattern: /^(.+?)\s*\(\s*(.+?)\s*[,#]\s*(\d+(?:\.\d+)?)\s*\)$/ },
     // "Title (Series Name Book 1)"
-    /^(.+?)\s*\(\s*(.+?)\s+Book\s+(\d+(?:\.\d+)?)\s*\)$/i,
+    { pattern: /^(.+?)\s*\(\s*(.+?)\s+Book\s+(\d+(?:\.\d+)?)\s*\)$/i },
     // "Title: Series Name #1"
-    /^(.+?):\s*(.+?)\s*#(\d+(?:\.\d+)?)$/,
-    // "Title (Book 1)"
-    /^(.+?)\s*\(\s*Book\s+(\d+(?:\.\d+)?)\s*\)$/i,
-    // "Title #1"
-    /^(.+?)\s*#(\d+(?:\.\d+)?)$/,
-    // "Title, Book 1"
-    /^(.+?),\s*Book\s+(\d+(?:\.\d+)?)$/i,
+    { pattern: /^(.+?):\s*(.+?)\s*#(\d+(?:\.\d+)?)$/ },
     // "Series Name: Title (Book 1)"
-    /^(.+?):\s*(.+?)\s*\(\s*Book\s+(\d+(?:\.\d+)?)\s*\)$/i,
+    {
+      pattern: /^(.+?):\s*(.+?)\s*\(\s*Book\s+(\d+(?:\.\d+)?)\s*\)$/i,
+      seriesPrefix: true,
+    },
+    // "Title (Book 1)"
+    { pattern: /^(.+?)\s*\(\s*Book\s+(\d+(?:\.\d+)?)\s*\)$/i },
+    // "Title #1"
+    { pattern: /^(.+?)\s*#(\d+(?:\.\d+)?)$/ },
+    // "Title, Book 1"
+    { pattern: /^(.+?),\s*Book\s+(\d+(?:\.\d+)?)$/i },
   ];
 
-  for (const pattern of patterns) {
+  for (const { pattern, seriesPrefix } of patterns) {
     const match = title.match(pattern);
     if (match) {
       if (match.length === 4) {
         // Pattern with series name and position
         return {
-          cleanTitle: match[1].trim(),
-          seriesName: match[2].trim(),
+          cleanTitle: (seriesPrefix ? match[2] : match[1]).trim(),
+          seriesName: (seriesPrefix ? match[1] : match[2]).trim(),
           seriesPosition: parseFloat(match[3]),
         };
       } else if (match.length === 3) {

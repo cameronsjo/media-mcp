@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Corrected extraction of series-prefixed book titles
+
 ### Added
 
 - Docker Compose for local and homelab deployment
