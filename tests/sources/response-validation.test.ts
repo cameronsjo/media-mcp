@@ -48,12 +48,102 @@ describe('source response validation', () => {
         page: 1,
         total_results: 1,
         total_pages: 1,
-        results: { id: 1 },
+        results: [{ id: 'not-a-number', title: 'Malformed', popularity: 1 }],
       })
     );
 
     await expect(source.searchMovie('Malformed')).resolves.toBeNull();
     expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(cache.get(SQLiteCache.makeKey('tmdb', 'search-movie', 'Malformed'))).toBeNull();
+  });
+
+  it('returns null for a malformed successful TMDB TV search response', async () => {
+    const logger = new Logger('test');
+    const source = new TMDBSource('test-api-key', cache, logger, new RateLimiter(logger));
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        page: 1,
+        total_results: 1,
+        total_pages: 1,
+        results: [{ id: 'not-a-number', name: 'Malformed', popularity: 1 }],
+      })
+    );
+
+    await expect(source.searchTV('Malformed')).resolves.toBeNull();
+    expect(cache.get(SQLiteCache.makeKey('tmdb', 'search-tv', 'Malformed'))).toBeNull();
+  });
+
+  it('returns null for a malformed successful TMDB TV details response', async () => {
+    const logger = new Logger('test');
+    const source = new TMDBSource('test-api-key', cache, logger, new RateLimiter(logger));
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        id: 'not-a-number',
+        name: 'Malformed',
+        original_name: 'Malformed',
+        first_air_date: '',
+        last_air_date: null,
+        status: 'Ended',
+        genres: [],
+        overview: '',
+        tagline: '',
+        poster_path: null,
+        backdrop_path: null,
+        vote_average: 0,
+        vote_count: 0,
+        created_by: [],
+        networks: [],
+        episode_run_time: [],
+        number_of_seasons: 0,
+        number_of_episodes: 0,
+        seasons: [],
+      })
+    );
+
+    await expect(source.getTVDetails(7, false)).resolves.toBeNull();
+    expect(cache.get(SQLiteCache.makeKey('tmdb', 'tv', 7, 'no-seasons', 'no-episodes'))).toBeNull();
+  });
+
+  it('returns null for a malformed successful TMDB season response', async () => {
+    const logger = new Logger('test');
+    const source = new TMDBSource('test-api-key', cache, logger, new RateLimiter(logger));
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        id: 'not-a-number',
+        season_number: 1,
+        name: 'Malformed',
+        air_date: null,
+        episodes: [],
+      })
+    );
+
+    const sourceWithPrivateMethods = source as unknown as {
+      getSeasonDetails: (tvId: number, seasonNumber: number) => Promise<unknown>;
+    };
+    await expect(sourceWithPrivateMethods.getSeasonDetails(7, 1)).resolves.toBeNull();
+    expect(cache.get(SQLiteCache.makeKey('tmdb', 'season', 7, 1))).toBeNull();
+  });
+
+  it('returns an empty collection for a malformed successful TMDB collection response', async () => {
+    const logger = new Logger('test');
+    const source = new TMDBSource('test-api-key', cache, logger, new RateLimiter(logger));
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        id: 'not-a-number',
+        name: 'Malformed',
+        parts: [],
+      })
+    );
+
+    const sourceWithPrivateMethods = source as unknown as {
+      getCollectionPosition: (collectionId: number, movieId: number) => Promise<unknown>;
+    };
+    await expect(sourceWithPrivateMethods.getCollectionPosition(9, 7)).resolves.toEqual({
+      name: null,
+      position: null,
+      total_films: null,
+    });
+    expect(cache.get(SQLiteCache.makeKey('tmdb', 'collection', 9))).toBeNull();
   });
 
   it('keeps a sparse TMDB movie when optional credits or providers are malformed', async () => {
@@ -82,6 +172,7 @@ describe('source response validation', () => {
     expect(result?.cast).toEqual([]);
     expect(result?.directors).toEqual([]);
     expect(result?.watch_providers).toEqual({});
+    expect(cache.get(SQLiteCache.makeKey('tmdb', 'movie', 1))).toBeNull();
     const validationWarnings = emitter.mock.calls
       .map(([entry]) => entry)
       .filter((entry) => entry.data.action === 'response_validation_failed');
@@ -119,6 +210,7 @@ describe('source response validation', () => {
     expect(validationWarnings.map((entry) => entry.data.endpoint)).toEqual([
       '/movie/2/watch/providers',
     ]);
+    expect(cache.get(SQLiteCache.makeKey('tmdb', 'movie', 2))).toBeNull();
   });
 
   it('returns null for a malformed successful Open Library search response', async () => {
@@ -128,11 +220,12 @@ describe('source response validation', () => {
       jsonResponse({
         numFound: 1,
         start: 0,
-        docs: { key: '/works/1' },
+        docs: [{ key: '/works/1', title: 'Malformed', author_name: 'not-an-array' }],
       })
     );
 
     await expect(source.searchByTitleAuthor('Malformed')).resolves.toBeNull();
+    expect(cache.get(SQLiteCache.makeKey('open_library', 'search', 'Malformed'))).toBeNull();
   });
 
   it('accepts sparse Open Library ISBN data with extra fields', async () => {
@@ -225,11 +318,12 @@ describe('source response validation', () => {
       jsonResponse({
         kind: 'books#volumes',
         totalItems: 1,
-        items: { id: 'not-an-array' },
+        items: [{ id: 'malformed', volumeInfo: { title: 42 } }],
       })
     );
 
     await expect(source.searchByISBN('1234567890')).resolves.toBeNull();
+    expect(cache.get(SQLiteCache.makeKey('google_books', 'isbn', '1234567890'))).toBeNull();
   });
 
   it('accepts sparse Google Books volume data with extra fields', async () => {
@@ -253,6 +347,20 @@ describe('source response validation', () => {
     expect(result?.title).toBe('Sparse Book');
     expect(result?.identifier).toBe('sparse-volume');
     expect(result?.source).toBe('google_books');
+  });
+
+  it('returns null for a malformed successful Google Books by-id response', async () => {
+    const logger = new Logger('test');
+    const source = new GoogleBooksSource(null, cache, logger, new RateLimiter(logger));
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        id: 'malformed',
+        volumeInfo: { title: 42 },
+      })
+    );
+
+    await expect(source.getBookById('malformed')).resolves.toBeNull();
+    expect(cache.get(SQLiteCache.makeKey('google_books', 'id', 'malformed'))).toBeNull();
   });
 
   it('returns null before Cheerio for a non-string Goodreads response', async () => {
@@ -294,13 +402,23 @@ describe('source response validation', () => {
       logger,
       new RateLimiter(logger)
     );
-    mockRequest.mockResolvedValueOnce(
-      jsonResponse({
-        data: { search: { results: { hits: { document: {} } } } },
-      })
-    );
+    mockRequest
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: { search: { results: { hits: [] } } },
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            books: [{ id: 'not-a-number', title: 'Malformed', slug: 'malformed' }],
+          },
+        })
+      );
 
     await expect(source.searchByTitleAuthor('Malformed')).resolves.toBeNull();
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    expect(cache.get(SQLiteCache.makeKey('hardcover', 'search', 'Malformed'))).toBeNull();
   });
 
   it('accepts sparse Hardcover book data with extra fields', async () => {
@@ -352,6 +470,44 @@ describe('source response validation', () => {
     expect(result?.title).toBe('Sparse Book');
     expect(result?.identifier).toBe('1');
     expect(result?.source).toBe('hardcover');
+  });
+
+  it('returns null for a malformed successful Hardcover ISBN response', async () => {
+    const logger = new Logger('test');
+    const source = new HardcoverSource(
+      { apiKey: 'test-api-key' },
+      cache,
+      logger,
+      new RateLimiter(logger)
+    );
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        data: {
+          editions: [
+            {
+              book: { id: 'not-a-number', title: 'Malformed', slug: 'malformed' },
+            },
+          ],
+        },
+      })
+    );
+
+    await expect(source.searchByISBN('1234567890')).resolves.toBeNull();
+    expect(cache.get(SQLiteCache.makeKey('hardcover', 'isbn', '1234567890'))).toBeNull();
+  });
+
+  it('returns null for a malformed successful Open Library work response', async () => {
+    const logger = new Logger('test');
+    const source = new OpenLibrarySource(cache, logger, new RateLimiter(logger));
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        title: 5,
+        description: null,
+      })
+    );
+
+    await expect(source.getWorkDetails('/works/malformed')).resolves.toBeNull();
+    expect(cache.get(SQLiteCache.makeKey('open_library', 'work', '/works/malformed'))).toBeNull();
   });
 
   it.each([

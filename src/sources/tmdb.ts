@@ -169,11 +169,13 @@ export class TMDBSource {
 
       const details = TMDBMovieDetailsSchema.parse(detailsRes.data);
       let parsedCredits: TMDBMovieCredits | null = null;
+      let enrichmentValidationFailed = false;
       if (creditsRes.status === 200) {
         const credits = TMDBMovieCreditsSchema.safeParse(creditsRes.data);
         if (credits.success) {
           parsedCredits = credits.data;
         } else {
+          enrichmentValidationFailed = true;
           this.logger.warning('tmdb', {
             action: 'response_validation_failed',
             endpoint: `/movie/${tmdbId}/credits`,
@@ -191,6 +193,7 @@ export class TMDBSource {
         if (providers.success) {
           parsedProviders = providers.data;
         } else {
+          enrichmentValidationFailed = true;
           this.logger.warning('tmdb', {
             action: 'response_validation_failed',
             endpoint: `/movie/${tmdbId}/watch/providers`,
@@ -258,7 +261,9 @@ export class TMDBSource {
         },
       };
 
-      this.cache.set(cacheKey, result, SOURCE, CacheTTL.MOVIE_TV_METADATA);
+      if (!enrichmentValidationFailed) {
+        this.cache.set(cacheKey, result, SOURCE, CacheTTL.MOVIE_TV_METADATA);
+      }
       return result;
     } catch (error) {
       this.logger.error('tmdb', {
