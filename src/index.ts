@@ -8,8 +8,7 @@ import {
   ListToolsRequestSchema,
   SetLevelRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { createToolHandlers, type ToolDefinition } from './handlers/tool-handlers.js';
 
 // Read version from package.json
 const require = createRequire(import.meta.url);
@@ -182,12 +181,6 @@ const batchLookupTool =
     : null;
 
 // Tool definitions
-interface ToolDefinition {
-  name: string;
-  description: string;
-  inputSchema: z.ZodType<unknown>;
-}
-
 const tools: ToolDefinition[] = [
   {
     name: 'lookup_book',
@@ -260,23 +253,17 @@ if (config.transport === 'stdio') {
   });
 }
 
+const handlers = createToolHandlers(tools, executeToolCall, logger, config.server);
+
 // Handle list tools request
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      inputSchema: toMcpInputSchema(tool.inputSchema),
-    })),
-  };
+  return handlers.listTools();
 });
 
 // Handle set logging level request
 server.setRequestHandler(SetLevelRequestSchema, async (request) => {
   const level = request.params.level as LogLevel;
-  logger.setLevel(level);
-  logger.info('main', { action: 'log_level_changed', level });
-  return {};
+  return handlers.setLevel(level, true);
 });
 
 /**
@@ -376,22 +363,8 @@ async function executeToolCall(
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
-  return executeToolCall(name, args);
+  return handlers.callTool(name, args);
 });
-
-/**
- * Convert Zod schema to JSON Schema for MCP tool registration.
- * Uses zod-to-json-schema library for robust conversion.
- */
-function toMcpInputSchema(schema: z.ZodType<unknown>): Record<string, unknown> {
-  const jsonSchema = zodToJsonSchema(schema, {
-    $refStrategy: 'none', // Inline all definitions for MCP compatibility
-  });
-  // Remove $schema property as MCP doesn't need it
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { $schema: _, ...schemaWithoutMeta } = jsonSchema as Record<string, unknown>;
-  return schemaWithoutMeta;
-}
 
 // Start the server
 async function main() {
@@ -419,77 +392,7 @@ async function main() {
       });
 
       try {
-        // Handle initialize
-        if (request.method === 'initialize') {
-          return {
-            jsonrpc: '2.0' as const,
-            id: request.id,
-            result: {
-              protocolVersion: '2025-11-25',
-              capabilities: {
-                tools: {},
-                logging: {},
-              },
-              serverInfo: {
-                name: config.server.name,
-                version: config.server.version,
-              },
-            },
-          };
-        }
-
-        // Handle tools/list
-        if (request.method === 'tools/list') {
-          return {
-            jsonrpc: '2.0' as const,
-            id: request.id,
-            result: {
-              tools: tools.map((tool) => ({
-                name: tool.name,
-                description: tool.description,
-                inputSchema: toMcpInputSchema(tool.inputSchema),
-              })),
-            },
-          };
-        }
-
-        // Handle tools/call with full implementation
-        if (request.method === 'tools/call') {
-          const params = request.params as { name: string; arguments?: unknown };
-          const result = await executeToolCall(params.name, params.arguments || {});
-
-          return {
-            jsonrpc: '2.0' as const,
-            id: request.id,
-            result,
-          };
-        }
-
-        // Handle logging/setLevel
-        if (request.method === 'logging/setLevel') {
-          const params = request.params as { level: string };
-          logger.setLevel(params.level as LogLevel);
-          return {
-            jsonrpc: '2.0' as const,
-            id: request.id,
-            result: {},
-          };
-        }
-
-        // Handle ping
-        if (request.method === 'ping') {
-          return {
-            jsonrpc: '2.0' as const,
-            id: request.id,
-            result: {},
-          };
-        }
-
-        return {
-          jsonrpc: '2.0' as const,
-          id: request.id,
-          error: { code: -32601, message: `Method not found: ${request.method}` },
-        };
+        return await handlers.handleHttpRequest(request);
       } catch (error) {
         logger.error('main', {
           action: 'http_error',
