@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Corrected extraction of series-prefixed book titles
+- Preserve colon-subtitle titles such as `Dune: Messiah (Book 2)` during series extraction.
 - Goodreads scraping now emits warning diagnostics when search or detail selectors produce no usable data.
+- Normalized Unicode titles before fuzzy matching without stripping combining marks.
 
 ### Added
 

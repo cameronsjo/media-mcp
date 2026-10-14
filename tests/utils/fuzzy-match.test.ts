@@ -50,6 +50,14 @@ describe('stringSimilarity', () => {
     expect(stringSimilarity('日本語', '日本語')).toBe(1);
   });
 
+  it('treats NFC and NFD spellings as equivalent without stripping combining marks', () => {
+    const nfc = 'Café';
+    const nfd = 'Cafe\u0301';
+
+    expect(normalize(nfd)).toBe(nfc.toLowerCase());
+    expect(stringSimilarity(nfc, nfd)).toBe(1);
+  });
+
   it('returns zero when only one normalized input is empty', () => {
     expect(stringSimilarity('!!!', 'book')).toBe(0);
   });
@@ -188,27 +196,28 @@ describe('extractSeriesFromTitle', () => {
     });
   });
 
-  it('extracts a series from a hyphenated Series Book pattern', () => {
-    expect(extractSeriesFromTitle('Book Name - Series Book 1')).toEqual({
-      cleanTitle: 'Book Name',
-      seriesName: 'Series',
+  it('keeps a real hyphenated title intact for a Book pattern', () => {
+    expect(extractSeriesFromTitle('The Hobbit - Or There and Back Again (Book 1)')).toEqual({
+      cleanTitle: 'The Hobbit - Or There and Back Again',
+      seriesName: null,
       seriesPosition: 1,
     });
   });
 
-  it('extracts a series from a Part of Series pattern', () => {
-    expect(extractSeriesFromTitle('Book Name, Part 1 of Series')).toEqual({
-      cleanTitle: 'Book Name',
-      seriesName: 'Series',
-      seriesPosition: 1,
+  it('does not parse a bare hyphenated subtitle as a series', () => {
+    const title = 'The Hobbit - Or There and Back Again Book 1';
+    expect(extractSeriesFromTitle(title)).toEqual({
+      cleanTitle: title,
+      seriesName: null,
+      seriesPosition: null,
     });
   });
 
-  it('extracts a series from a standalone Part of Series pattern', () => {
-    expect(extractSeriesFromTitle('Part 1 of Series')).toEqual({
-      cleanTitle: 'Part 1',
-      seriesName: 'Series',
-      seriesPosition: 1,
+  it.each(['Part 1 of 2', 'Part 1 of Series'])('does not parse %s as series metadata', (title) => {
+    expect(extractSeriesFromTitle(title)).toEqual({
+      cleanTitle: title,
+      seriesName: null,
+      seriesPosition: null,
     });
   });
 

@@ -56,7 +56,8 @@ export function stringSimilarity(a: string, b: string): number {
 export function normalize(str: string): string {
   return str
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}_\s]/gu, '') // Remove punctuation while preserving Unicode letters and numbers
+    .normalize('NFC')
+    .replace(/[^\p{L}\p{M}\p{N}_\s]/gu, '') // Remove punctuation while preserving Unicode letters, marks, and numbers
     .replace(/\s+/g, ' ') // Normalize whitespace
     .trim();
 }
@@ -153,42 +154,30 @@ export function extractSeriesFromTitle(title: string): {
   seriesPosition: number | null;
 } {
   // Common series patterns
-  const patterns: Array<{ pattern: RegExp; positionBeforeSeries?: boolean }> = [
+  const patterns = [
     // "(Series Name #1)" or "(Series Name, #1)"
-    { pattern: /^(.+?)\s*\(\s*(.+?)\s*[,#]\s*(\d+(?:\.\d+)?)\s*\)$/ },
+    /^(.+?)\s*\(\s*(.+?)\s*[,#]\s*(\d+(?:\.\d+)?)\s*\)$/,
     // "Title (Series Name Book 1)"
-    { pattern: /^(.+?)\s*\(\s*(.+?)\s+Book\s+(\d+(?:\.\d+)?)\s*\)$/i },
+    /^(.+?)\s*\(\s*(.+?)\s+Book\s+(\d+(?:\.\d+)?)\s*\)$/i,
     // "Title: Series Name #1"
-    { pattern: /^(.+?):\s*(.+?)\s*#(\d+(?:\.\d+)?)$/ },
+    /^(.+?):\s*(.+?)\s*#(\d+(?:\.\d+)?)$/,
     // "Title (Book 1)"
-    { pattern: /^(.+?)\s*\(\s*Book\s+(\d+(?:\.\d+)?)\s*\)$/i },
+    /^(.+?)\s*\(\s*Book\s+(\d+(?:\.\d+)?)\s*\)$/i,
     // "Title #1"
-    { pattern: /^(.+?)\s*#(\d+(?:\.\d+)?)$/ },
+    /^(.+?)\s*#(\d+(?:\.\d+)?)$/,
     // "Title, Book 1"
-    { pattern: /^(.+?),\s*Book\s+(\d+(?:\.\d+)?)$/i },
-    // "Book Name - Series Book 1"
-    { pattern: /^(.+?)\s+-\s+(.+?)\s+Book\s+(\d+(?:\.\d+)?)$/i },
-    // "Book Name, Part 1 of Series"
-    {
-      pattern: /^(.+?),\s*Part\s+(\d+(?:\.\d+)?)\s+of\s+(.+?)$/i,
-      positionBeforeSeries: true,
-    },
-    // "Part 1 of Series"
-    {
-      pattern: /^(Part\s+(\d+(?:\.\d+)?))\s+of\s+(.+?)$/i,
-      positionBeforeSeries: true,
-    },
+    /^(.+?),\s*Book\s+(\d+(?:\.\d+)?)$/i,
   ];
 
-  for (const { pattern, positionBeforeSeries } of patterns) {
+  for (const pattern of patterns) {
     const match = title.match(pattern);
     if (match) {
       if (match.length === 4) {
         // Pattern with series name and position
         return {
           cleanTitle: match[1].trim(),
-          seriesName: (positionBeforeSeries ? match[3] : match[2]).trim(),
-          seriesPosition: parseFloat(positionBeforeSeries ? match[2] : match[3]),
+          seriesName: match[2].trim(),
+          seriesPosition: parseFloat(match[3]),
         };
       } else if (match.length === 3) {
         // Pattern with position only
