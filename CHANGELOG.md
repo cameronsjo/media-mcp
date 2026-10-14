@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Consolidated CI workflows (merged test.yml into ci.yml)
+- Reserve rate-limit slots before dispatching outbound requests.
 - Updated grouped dependency security fixes and migrated telemetry initialization to OpenTelemetry 2 APIs
 - Aligned the declared Node minimum with the production dependency requirement of 20.18.1
 
