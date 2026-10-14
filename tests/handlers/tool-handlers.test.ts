@@ -51,23 +51,35 @@ describe('shared tool handlers', () => {
     expect(execute).toHaveBeenCalledExactlyOnceWith('example', args);
   });
 
-  it('preserves absent-argument behavior for the SDK request handler', async () => {
+  it('passes undefined for absent tool arguments in both SDK factories', async () => {
     const { handlers, execute } = setup();
     await handlers.callTool('example', undefined);
-    expect(execute).toHaveBeenCalledExactlyOnceWith('example', undefined);
+    await handlers.callTool('example', undefined);
+    expect(execute.mock.calls).toEqual([
+      ['example', undefined],
+      ['example', undefined],
+    ]);
   });
 
-  it('sets the logging level and preserves the stdio announcement', () => {
+  it('sets the logging level in both SDK factories and announces both changes', () => {
     const { handlers, logger } = setup();
     const setLevel = vi.spyOn(logger, 'setLevel');
     const info = vi.spyOn(logger, 'info');
-
-    expect(handlers.setLevel('debug', true)).toEqual({});
-    expect(setLevel).toHaveBeenCalledExactlyOnceWith('debug');
-    expect(info).toHaveBeenCalledExactlyOnceWith('main', {
-      action: 'log_level_changed',
-      level: 'debug',
+    const emitted: Array<{ action?: unknown; level?: unknown }> = [];
+    logger.setEmitter((entry) => {
+      emitted.push(entry.data as { action?: unknown; level?: unknown });
     });
+    expect(handlers.setLevel('debug', true)).toEqual({});
+    expect(handlers.setLevel('debug', true)).toEqual({});
+    expect(setLevel.mock.calls).toEqual([['debug'], ['debug']]);
+    expect(info.mock.calls).toEqual([
+      ['main', { action: 'log_level_changed', level: 'debug' }],
+      ['main', { action: 'log_level_changed', level: 'debug' }],
+    ]);
+    expect(emitted.map(({ action, level }) => ({ action, level }))).toEqual([
+      { action: 'log_level_changed', level: 'debug' },
+      { action: 'log_level_changed', level: 'debug' },
+    ]);
   });
 
   it('leaves thrown exceptions for the SDK transport error boundary', async () => {

@@ -1,6 +1,6 @@
-import { spawn, execFile, type ChildProcess } from 'node:child_process';
+import { execFile, execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, statSync, utimesSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -86,6 +86,51 @@ function childEnvironment(overrides: Record<string, string>): Record<string, str
     TMDB_API_KEY: 'transport-smoke-test',
     ...overrides,
   };
+}
+
+function latestMtime(path: string): number {
+  const stat = statSync(path);
+  if (!stat.isDirectory()) return stat.mtimeMs;
+
+  return readdirSync(path, { withFileTypes: true }).reduce((latest, entry) => {
+    return Math.max(latest, latestMtime(resolve(path, entry.name)));
+  }, stat.mtimeMs);
+}
+
+function buildInputsAreNewer(): boolean {
+  if (!existsSync(serverEntrypoint)) return true;
+
+  const distMtime = statSync(serverEntrypoint).mtimeMs;
+  return [
+    resolve(repoRoot, 'src'),
+    resolve(repoRoot, 'package.json'),
+    resolve(repoRoot, 'tsconfig.json'),
+  ]
+    .filter((path) => existsSync(path))
+    .some((path) => latestMtime(path) > distMtime);
+}
+
+function ensureBuilt(): void {
+  if (!buildInputsAreNewer()) return;
+
+  try {
+    execFileSync('npm', ['run', 'build'], {
+      cwd: repoRoot,
+      env: process.env,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    const buildError = error as { status?: number; stdout?: string; stderr?: string };
+    throw new Error(
+      `Smoke test could not build ${serverEntrypoint} (exit ${buildError.status ?? 'unknown'}):\n` +
+        `${buildError.stdout ?? ''}${buildError.stderr ?? ''}`
+    );
+  }
+
+  if (!existsSync(serverEntrypoint)) {
+    throw new Error(`Smoke test build completed without creating ${serverEntrypoint}`);
+  }
 }
 
 function spawnHttpServer(port: number): SpawnedServer {
@@ -258,6 +303,21 @@ describe('built transport smoke test', () => {
       cwd: repoRoot,
       timeout: 25_000,
     });
+  });
+
+  it('rebuilds when source inputs are newer than the compiled entrypoint', () => {
+    ensureBuilt();
+    const sourcePath = resolve(repoRoot, 'src/index.ts');
+    const sourceStat = statSync(sourcePath);
+    const beforeBuild = statSync(serverEntrypoint);
+
+    utimesSync(sourcePath, sourceStat.atime, new Date(beforeBuild.mtimeMs + 1000));
+    try {
+      ensureBuilt();
+      expect(statSync(serverEntrypoint).mtimeMs).toBeGreaterThan(beforeBuild.mtimeMs);
+    } finally {
+      utimesSync(sourcePath, sourceStat.atime, sourceStat.mtime);
+    }
   });
 
   it('serves modern and legacy clients over stateless stdio and HTTP', async () => {

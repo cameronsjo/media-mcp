@@ -56,7 +56,8 @@ export function stringSimilarity(a: string, b: string): number {
 export function normalize(str: string): string {
   return str
     .toLowerCase()
-    .replace(/[^\w\s]/g, '') // Remove punctuation
+    .normalize('NFC')
+    .replace(/[^\p{L}\p{M}\p{N}_\s]/gu, '') // Remove punctuation while preserving Unicode letters, marks, and numbers
     .replace(/\s+/g, ' ') // Normalize whitespace
     .trim();
 }
@@ -166,8 +167,6 @@ export function extractSeriesFromTitle(title: string): {
     /^(.+?)\s*#(\d+(?:\.\d+)?)$/,
     // "Title, Book 1"
     /^(.+?),\s*Book\s+(\d+(?:\.\d+)?)$/i,
-    // "Series Name: Title (Book 1)"
-    /^(.+?):\s*(.+?)\s*\(\s*Book\s+(\d+(?:\.\d+)?)\s*\)$/i,
   ];
 
   for (const pattern of patterns) {

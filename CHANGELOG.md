@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Removed an unreachable series-extraction pattern and added a regression test pinning existing colon-subtitle behavior (for example, `Dune: Messiah (Book 2)`).
 - Goodreads scraping now emits warning diagnostics when search or detail selectors produce no usable data.
+- Fixed non-ASCII fuzzy similarity by preserving Unicode letters and combining marks, with NFC normalization for equivalent spellings.
 
 ### Added
 
@@ -25,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Consolidated CI workflows (merged test.yml into ci.yml)
+- HTTP `logging/setLevel` now announces `log_level_changed`, matching stdio; omitted `tools/call` arguments now reach `executeToolCall` as `undefined` instead of `{}`.
 - Added periodic cleanup for expired cache entries
 - Reserve rate-limit slots before dispatching outbound requests.
 - Migrated MCP serving to the v2 stateless SDK while retaining stdio and legacy HTTP clients
