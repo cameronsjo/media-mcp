@@ -37,6 +37,13 @@ describe('normalize', () => {
     expect(normalize('_ABC 123_ [test]')).toBe('_abc 123_ test');
     expect(normalize('!@#$%^&*()\t')).toBe('');
   });
+
+  it('preserves combining marks that do not compose under NFC', () => {
+    const word = 'हिन्दी';
+    expect(word.normalize('NFC')).toBe(word);
+    expect(normalize(word)).toBe(word);
+    expect(stringSimilarity(word, 'हन्द')).not.toBe(1);
+  });
 });
 
 describe('stringSimilarity', () => {
