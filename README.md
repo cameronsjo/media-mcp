@@ -141,6 +141,13 @@ TMDB_API_KEY=your-key node dist/index.js --transport http
 
 Connect your MCP client to `http://127.0.0.1:3000/mcp`
 
+HTTP serving uses the MCP v2 stateless SDK: modern clients send each request
+with its protocol envelope and do not need an `initialize` handshake or
+`Mcp-Session-Id`. The same endpoint keeps the SDK's stateless legacy
+compatibility path for 2025-era clients, and stdio serves both protocol eras.
+The SDK's legacy `logging/setLevel` compatibility remains available for now;
+migrating to stderr/OpenTelemetry is a follow-up.
+
 ## Tools
 
 ### lookup_book

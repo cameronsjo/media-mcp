@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Consolidated CI workflows (merged test.yml into ci.yml)
+- Migrated MCP serving to the v2 stateless SDK while retaining stdio and legacy HTTP clients
 
 ## [1.0.0] - 2024-12-01
 
