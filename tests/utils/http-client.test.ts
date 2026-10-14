@@ -142,4 +142,95 @@ describe('HttpClient', () => {
       expect(calledUrl).toBe('https://api.hardcover.app/v1/graphql');
     });
   });
+
+  describe('rate limiting', () => {
+    it('counts each dispatched request once', async () => {
+      rateLimiter.configure('test', { requestsPerWindow: 2, windowMs: 1000 });
+      const client = new HttpClient(
+        'test',
+        { baseUrl: 'https://api.example.com' },
+        logger,
+        rateLimiter
+      );
+      mockJsonResponse({ ok: true });
+
+      await client.get('/one');
+
+      expect(rateLimiter.canRequest('test')).toBe(true);
+    });
+
+    it('bounds concurrent dispatches to the configured window', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(0));
+
+      try {
+        rateLimiter.configure('test', { requestsPerWindow: 2, windowMs: 1000 });
+        const client = new HttpClient(
+          'test',
+          { baseUrl: 'https://api.example.com' },
+          logger,
+          rateLimiter
+        );
+        const pendingResponses: Array<(response: unknown) => void> = [];
+        mockRequest.mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              pendingResponses.push(resolve);
+            }) as any
+        );
+
+        const requests = [1, 2, 3].map((index) => client.get(`/${index}`));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(mockRequest).toHaveBeenCalledTimes(2);
+
+        await vi.advanceTimersByTimeAsync(999);
+        expect(mockRequest).toHaveBeenCalledTimes(2);
+
+        const response = {
+          statusCode: 200,
+          headers: {},
+          body: { text: vi.fn().mockResolvedValue('{"ok":true}') },
+        };
+        pendingResponses.splice(0, 2).forEach((resolve) => resolve(response));
+        await Promise.all(requests.slice(0, 2));
+
+        await vi.advanceTimersByTimeAsync(1);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(mockRequest).toHaveBeenCalledTimes(3);
+        pendingResponses.shift()?.(response);
+        await requests[2];
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('consumes a slot when the network request fails', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(0));
+
+      try {
+        rateLimiter.configure('test', { requestsPerWindow: 1, windowMs: 1000 });
+        const client = new HttpClient(
+          'test',
+          { baseUrl: 'https://api.example.com' },
+          logger,
+          rateLimiter
+        );
+        mockRequest.mockRejectedValueOnce(new Error('network down'));
+        mockJsonResponse({ ok: true });
+
+        await expect(client.get('/failure', { retries: 1 })).rejects.toThrow('network down');
+
+        const nextRequest = client.get('/next', { retries: 1 });
+        await vi.advanceTimersByTimeAsync(999);
+        expect(mockRequest).toHaveBeenCalledTimes(1);
+
+        await vi.advanceTimersByTimeAsync(1);
+        await nextRequest;
+        expect(mockRequest).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });
