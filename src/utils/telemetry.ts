@@ -1,5 +1,5 @@
 import { trace, metrics, Span, SpanStatusCode, Counter, Histogram } from '@opentelemetry/api';
-import { Resource } from '@opentelemetry/resources';
+import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 import { BasicTracerProvider, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
@@ -27,7 +27,7 @@ export function initTelemetry(config: Config): void {
     return;
   }
 
-  const resource = new Resource({
+  const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]: config.otelServiceName,
     [ATTR_SERVICE_VERSION]: '1.0.0',
   });
@@ -38,9 +38,11 @@ export function initTelemetry(config: Config): void {
       url: `${config.otelEndpoint}/v1/traces`,
     });
 
-    tracerProvider = new BasicTracerProvider({ resource });
-    tracerProvider.addSpanProcessor(new SimpleSpanProcessor(traceExporter));
-    tracerProvider.register();
+    tracerProvider = new BasicTracerProvider({
+      resource,
+      spanProcessors: [new SimpleSpanProcessor(traceExporter)],
+    });
+    trace.setGlobalTracerProvider(tracerProvider);
 
     // Set up metrics
     const metricExporter = new OTLPMetricExporter({

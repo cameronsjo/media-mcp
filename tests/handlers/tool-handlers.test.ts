@@ -51,7 +51,7 @@ describe('shared tool handlers', () => {
     expect(execute).toHaveBeenCalledExactlyOnceWith('example', args);
   });
 
-  it('passes undefined for absent tool arguments in both SDK factories', async () => {
+  it('forwards absent tool arguments unchanged through the shared call path', async () => {
     const { handlers, execute } = setup();
     await handlers.callTool('example', undefined);
     await handlers.callTool('example', undefined);
@@ -61,7 +61,7 @@ describe('shared tool handlers', () => {
     ]);
   });
 
-  it('sets the logging level in both SDK factories and announces both changes', () => {
+  it('announces each logging-level change through the shared emitter', () => {
     const { handlers, logger } = setup();
     const setLevel = vi.spyOn(logger, 'setLevel');
     const info = vi.spyOn(logger, 'info');

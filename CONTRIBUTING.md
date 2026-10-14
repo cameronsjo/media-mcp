@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js >= 20
+- Node.js >= 20.18.1 (matches the production dependencies' minimum)
 - npm
 - Docker (optional, for container builds)
 
