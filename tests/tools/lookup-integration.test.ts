@@ -376,7 +376,23 @@ describe('LookupMovieTool integration paths', () => {
     expect(Object.keys(result.watch_providers).sort()).toEqual(['GB', 'US']);
   });
 
-  it('omits providers when requested and exposes search and detail failures', async () => {
+  it('omits providers when requested after successful detail shaping', async () => {
+    const tmdb = makeTMDB();
+    const tool = new LookupMovieTool(tmdb, testLogger());
+
+    const result = await tool.execute(
+      LookupMovieInputSchema.parse({
+        title: 'The Matrix',
+        tmdb_id: 603,
+        include_watch_providers: false,
+      })
+    );
+
+    expect(tmdb.getMovieDetails).toHaveBeenCalledWith(603);
+    expect(result.watch_providers).toEqual({});
+  });
+
+  it('exposes movie search and detail failures', async () => {
     const notFoundTMDB = makeTMDB({ searchMovie: vi.fn().mockResolvedValue(null) });
     const notFoundTool = new LookupMovieTool(notFoundTMDB, testLogger());
     await expect(
@@ -391,7 +407,6 @@ describe('LookupMovieTool integration paths', () => {
         LookupMovieInputSchema.parse({
           title: 'The Matrix',
           tmdb_id: 603,
-          include_watch_providers: false,
         })
       )
     ).rejects.toMatchObject({ code: 'SOURCE_ERROR', source: 'tmdb', retryable: true });
@@ -401,7 +416,20 @@ describe('LookupMovieTool integration paths', () => {
 
 describe('LookupTVTool integration paths', () => {
   it('uses a direct ID and passes season exclusion options through', async () => {
-    const tmdb = makeTMDB();
+    const fullResult = makeTV();
+    const getTVDetails = vi.fn(
+      (_tmdbId: number, includeSeasons = true, includeEpisodes = false): Promise<TVResult> =>
+        Promise.resolve({
+          ...fullResult,
+          seasons: includeSeasons
+            ? fullResult.seasons.map((season) => ({
+                ...season,
+                episodes: includeEpisodes ? season.episodes : undefined,
+              }))
+            : [],
+        })
+    );
+    const tmdb = makeTMDB({ getTVDetails });
     const tool = new LookupTVTool(tmdb, testLogger());
 
     const result = await tool.execute(
@@ -415,7 +443,7 @@ describe('LookupTVTool integration paths', () => {
 
     expect(tmdb.searchTV).not.toHaveBeenCalled();
     expect(tmdb.getTVDetails).toHaveBeenCalledWith(100, false, false);
-    expect(result.seasons).toHaveLength(1);
+    expect(result.seasons).toEqual([]);
   });
 
   it('uses safe defaults when season options are omitted by a direct caller', async () => {
@@ -505,6 +533,7 @@ describe('BatchLookupTool integration paths', () => {
       })
     );
 
+    expect(maxActive).toBeGreaterThan(1);
     expect(maxActive).toBeLessThanOrEqual(2);
     expect(result.total).toBe(4);
     expect(result.successful).toBe(3);
