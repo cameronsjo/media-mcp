@@ -48,6 +48,7 @@ The server is configured via environment variables. App-specific variables use t
 | `MCP_CACHE_TTL_BOOKS` | Book cache TTL in seconds | `604800` (7 days) |
 | `MCP_CACHE_TTL_MOVIES` | Movie cache TTL in seconds | `86400` (1 day) |
 | `MCP_CACHE_TTL_TV` | TV cache TTL in seconds | `86400` (1 day) |
+| `MCP_CACHE_CLEANUP_INTERVAL_MS` | Expired-entry cleanup interval in milliseconds | `3600000` (1 hour) |
 
 ### Rate Limiting
 

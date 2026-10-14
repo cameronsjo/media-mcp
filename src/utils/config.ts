@@ -55,6 +55,12 @@ export const ConfigSchema = z.object({
   cacheTtlBooks: z.number().default(86400 * 7), // 7 days in seconds
   cacheTtlMovies: z.number().default(86400), // 1 day in seconds
   cacheTtlTv: z.number().default(86400), // 1 day in seconds
+  cacheCleanupIntervalMs: z
+    .number()
+    .int()
+    .positive()
+    .max(2_147_483_647)
+    .default(60 * 60 * 1000), // 1 hour
 
   // Rate limiting
   rateLimitRequestsPerMinute: z.number().default(30),
@@ -112,6 +118,9 @@ export function loadConfig(): { config: Config; sources: SourceStatus[] } {
       : undefined,
     cacheTtlTv: process.env.MCP_CACHE_TTL_TV
       ? safeParseInt(process.env.MCP_CACHE_TTL_TV)
+      : undefined,
+    cacheCleanupIntervalMs: process.env.MCP_CACHE_CLEANUP_INTERVAL_MS
+      ? Number(process.env.MCP_CACHE_CLEANUP_INTERVAL_MS)
       : undefined,
 
     // Rate limiting (MCP_ prefix)

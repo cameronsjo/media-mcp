@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Goodreads scraping now emits warning diagnostics when search or detail selectors produce no usable data.
+
 ### Added
 
 - Docker Compose for local and homelab deployment
@@ -16,10 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ARM64 container image support
 - `.env.example` for onboarding
 - CONTRIBUTING guide and LICENSE file
+- Runtime validation for upstream media source responses
 
 ### Changed
 
 - Consolidated CI workflows (merged test.yml into ci.yml)
+- Added periodic cleanup for expired cache entries
 - Reserve rate-limit slots before dispatching outbound requests.
 - Migrated MCP serving to the v2 stateless SDK while retaining stdio and legacy HTTP clients
 - Stateless `GET` and `DELETE /mcp` now return HTTP 405; use `POST`.
