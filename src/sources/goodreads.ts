@@ -4,6 +4,7 @@ import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
 import { delay } from '../utils/rate-limiter.js';
 import { normalizeShelf } from '../utils/strings.js';
 import type { PartialBookData, BookSource } from '../types/book.js';
+import { GoodreadsHTMLSchema } from './response-schemas.js';
 
 const SOURCE: BookSource = 'goodreads';
 const BASE_URL = 'https://www.goodreads.com';
@@ -105,7 +106,8 @@ export class GoodreadsSource {
         return null;
       }
 
-      const $ = cheerio.load(response.data as string);
+      const html = GoodreadsHTMLSchema.parse(response.data);
+      const $ = cheerio.load(html);
 
       // Find the first book link — use URL pattern (resilient to class name changes)
       const bookLink = $('a[href*="/book/show/"]').first().attr('href');
@@ -165,12 +167,12 @@ export class GoodreadsSource {
         return null;
       }
 
-      const $ = cheerio.load(response.data as string);
+      const html = GoodreadsHTMLSchema.parse(response.data);
+      const $ = cheerio.load(html);
 
       // Extract rating — try multiple selectors (modern → legacy)
       const ratingText =
-        $('.RatingStatistics__rating').text().trim() ||
-        $('[itemprop="ratingValue"]').text().trim();
+        $('.RatingStatistics__rating').text().trim() || $('[itemprop="ratingValue"]').text().trim();
       // Look for rating count in page text
       const pageText = $.text();
       const ratingCountMatch = pageText.match(/([\d,]+)\s*ratings/);
@@ -233,8 +235,7 @@ export class GoodreadsSource {
 
       // Extract page count — look for "N pages" pattern in text
       const pageCountText =
-        $('[data-testid="pagesFormat"]').text() ||
-        $('[itemprop="numberOfPages"]').text();
+        $('[data-testid="pagesFormat"]').text() || $('[itemprop="numberOfPages"]').text();
       let pageCount: number | null = null;
       if (pageCountText) {
         pageCount = parseInt(pageCountText.replace(/[^\d]/g, ''), 10);
@@ -320,7 +321,8 @@ export class GoodreadsSource {
         return null;
       }
 
-      const $ = cheerio.load(response.data as string);
+      const html = GoodreadsHTMLSchema.parse(response.data);
+      const $ = cheerio.load(html);
 
       // Extract series name
       const seriesName =

@@ -1,42 +1,19 @@
+import { z } from 'zod';
 import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
 import { normalizeForComparison } from '../utils/strings.js';
 import type { PartialBookData, BookSource } from '../types/book.js';
+import {
+  HardcoverBooksPayloadSchema,
+  HardcoverEditionsPayloadSchema,
+  HardcoverGraphQLErrorSchema,
+  HardcoverSearchPayloadSchema,
+} from './response-schemas.js';
+import type { HardcoverBookResult } from './response-schemas.js';
 
 const SOURCE: BookSource = 'hardcover';
 const API_URL = 'https://api.hardcover.app/v1/graphql';
 const SITE_URL = 'https://hardcover.app';
-
-interface HardcoverBookResult {
-  id: number;
-  title: string;
-  slug: string;
-  description: string | null;
-  pages: number | null;
-  release_date: string | null;
-  rating: number | null;
-  ratings_count: number | null;
-  cached_tags: Record<string, { tag: string; count: number }[]> | null;
-  cached_contributors: { author: { name: string } }[] | null;
-  contributions: { author: { name: string } }[];
-  image?: { url: string } | null;
-  book_series: { series: { name: string; id: number }; position: number | null }[];
-  default_physical_edition?: { isbn_10: string | null; isbn_13: string | null } | null;
-}
-
-interface HardcoverSearchResult {
-  results: {
-    hits: {
-      document: {
-        id: number;
-        title: string;
-        slug: string;
-        author_names: string[];
-        image_url: string | null;
-      };
-    }[];
-  };
-}
 
 const BOOK_FIELDS = `
   id title slug description pages release_date
@@ -150,9 +127,11 @@ export class HardcoverSource {
         }
       `;
 
-      const result = await this.graphqlRequest<{
-        editions: { book: HardcoverBookResult }[];
-      }>(query, { isbn: cleanISBN });
+      const result = await this.graphqlRequest(
+        query,
+        { isbn: cleanISBN },
+        HardcoverEditionsPayloadSchema
+      );
 
       if (!result?.editions?.length) return null;
 
@@ -179,9 +158,10 @@ export class HardcoverSource {
     try {
       // Try search endpoint first
       const searchQuery = author ? `${title} ${author}` : title;
-      const searchResult = await this.graphqlRequest<{ search: HardcoverSearchResult }>(
+      const searchResult = await this.graphqlRequest(
         SEARCH_QUERY,
-        { query: searchQuery }
+        { query: searchQuery },
+        HardcoverSearchPayloadSchema
       );
 
       let bookId: number | null = null;
@@ -196,19 +176,21 @@ export class HardcoverSource {
           const doc = hit.document;
           const hitTitle = normalizeForComparison(doc.title);
 
-          const titleMatch = hitTitle === normalizedTitle ||
+          const titleMatch =
+            hitTitle === normalizedTitle ||
             hitTitle.includes(normalizedTitle) ||
             normalizedTitle.includes(hitTitle);
 
-          const authorMatch = !normalizedAuthor ||
-            doc.author_names?.some(
-              (a) => {
-                const na = normalizeForComparison(a);
-                return na === normalizedAuthor ||
-                  na.includes(normalizedAuthor) ||
-                  normalizedAuthor.includes(na);
-              }
-            );
+          const authorMatch =
+            !normalizedAuthor ||
+            doc.author_names?.some((a) => {
+              const na = normalizeForComparison(a);
+              return (
+                na === normalizedAuthor ||
+                na.includes(normalizedAuthor) ||
+                normalizedAuthor.includes(na)
+              );
+            });
 
           if (titleMatch && authorMatch) {
             bookId = doc.id;
@@ -224,9 +206,10 @@ export class HardcoverSource {
 
       if (!bookId) {
         // Fallback: direct title query
-        const directResult = await this.graphqlRequest<{ books: HardcoverBookResult[] }>(
+        const directResult = await this.graphqlRequest(
           BOOK_DETAIL_QUERY,
-          { title: `%${title}%`, author }
+          { title: `%${title}%`, author },
+          HardcoverBooksPayloadSchema
         );
 
         if (directResult?.books?.length) {
@@ -250,9 +233,10 @@ export class HardcoverSource {
       }
 
       // Fetch full book details by ID
-      const detailResult = await this.graphqlRequest<{ books: HardcoverBookResult[] }>(
+      const detailResult = await this.graphqlRequest(
         BOOK_BY_ID_QUERY,
-        { id: bookId }
+        { id: bookId },
+        HardcoverBooksPayloadSchema
       );
 
       if (!detailResult?.books?.length) return null;
@@ -271,14 +255,12 @@ export class HardcoverSource {
     }
   }
 
-  private async graphqlRequest<T>(
+  private async graphqlRequest<TSchema extends z.ZodTypeAny>(
     query: string,
-    variables: Record<string, unknown>
-  ): Promise<T | null> {
-    const response = await this.client.post<{ data?: T; errors?: { message: string }[] }>(
-      '',
-      { query, variables }
-    );
+    variables: Record<string, unknown>,
+    dataSchema: TSchema
+  ): Promise<z.infer<TSchema> | null> {
+    const response = await this.client.post<unknown>('', { query, variables });
 
     if (response.status === 401) {
       this.logger.warning('hardcover', {
@@ -304,19 +286,27 @@ export class HardcoverSource {
       return null;
     }
 
-    if (response.data.errors?.length) {
+    const envelope = z
+      .object({
+        data: dataSchema.nullable().optional(),
+        errors: z.array(HardcoverGraphQLErrorSchema).optional(),
+      })
+      .passthrough()
+      .parse(response.data);
+
+    if (envelope.errors?.length) {
       this.logger.warning('hardcover', {
         action: 'graphql_errors',
-        errors: response.data.errors.map((e) => e.message),
+        errors: envelope.errors.map((e) => e.message),
       });
       return null;
     }
 
-    return response.data.data ?? null;
+    return envelope.data ?? null;
   }
 
   private buildPartialBookData(book: HardcoverBookResult): PartialBookData {
-    const authors = book.contributions?.map((c) => c.author.name) ?? [];
+    const authors = book.contributions?.flatMap((c) => (c.author ? [c.author.name] : [])) ?? [];
 
     // Extract tags from cached_tags categories
     const genres: string[] = [];
@@ -343,10 +333,19 @@ export class HardcoverSource {
 
       // Tag category — some are trope-like, some are meta
       const metaTags = new Set([
-        'loveable characters', 'unloveable characters', 'diverse characters',
-        'not diverse characters', 'strong character development',
-        'weak character development', 'character driven', 'plot driven',
-        'a mix driven', 'fast', 'medium', 'slow', 'challenging',
+        'loveable characters',
+        'unloveable characters',
+        'diverse characters',
+        'not diverse characters',
+        'strong character development',
+        'weak character development',
+        'character driven',
+        'plot driven',
+        'a mix driven',
+        'fast',
+        'medium',
+        'slow',
+        'challenging',
       ]);
       for (const entry of book.cached_tags['Tag'] ?? []) {
         if (!metaTags.has(entry.tag.toLowerCase())) {
@@ -358,7 +357,7 @@ export class HardcoverSource {
 
     // Series info
     const seriesEntry = book.book_series?.[0];
-    const series = seriesEntry
+    const series = seriesEntry?.series
       ? {
           name: seriesEntry.series.name,
           position: seriesEntry.position,
@@ -397,15 +396,15 @@ export class HardcoverSource {
     const normalizedAuthor = normalizeForComparison(author);
 
     for (const book of books) {
-      const bookAuthors = book.contributions?.map((c) =>
-        normalizeForComparison(c.author.name)
-      ) ?? [];
+      const bookAuthors =
+        book.contributions?.flatMap((c) =>
+          c.author ? [normalizeForComparison(c.author.name)] : []
+        ) ?? [];
 
       if (
         bookAuthors.some(
-          (a) => a === normalizedAuthor ||
-            a.includes(normalizedAuthor) ||
-            normalizedAuthor.includes(a)
+          (a) =>
+            a === normalizedAuthor || a.includes(normalizedAuthor) || normalizedAuthor.includes(a)
         )
       ) {
         return book;

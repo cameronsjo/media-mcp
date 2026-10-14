@@ -1,0 +1,420 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { GoogleBooksSource } from '../../src/sources/google-books.js';
+import { GoodreadsSource } from '../../src/sources/goodreads.js';
+import { HardcoverSource } from '../../src/sources/hardcover.js';
+import { OpenLibrarySource } from '../../src/sources/open-library.js';
+import { TMDBSource } from '../../src/sources/tmdb.js';
+import { SQLiteCache } from '../../src/cache/sqlite-cache.js';
+import { Logger } from '../../src/utils/logger.js';
+import { RateLimiter } from '../../src/utils/rate-limiter.js';
+
+vi.mock('undici', () => ({
+  request: vi.fn(),
+}));
+
+import { request } from 'undici';
+
+const mockRequest = vi.mocked(request);
+
+function jsonResponse(payload: unknown, statusCode = 200): any {
+  const responseBody = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  return {
+    statusCode,
+    headers: {},
+    body: {
+      text: vi.fn().mockResolvedValue(responseBody),
+    },
+  };
+}
+
+describe('source response validation', () => {
+  let cache: SQLiteCache;
+
+  beforeEach(() => {
+    const logger = new Logger('test');
+    cache = new SQLiteCache({ path: ':memory:', defaultTTLHours: 24, enabled: true }, logger);
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cache.close();
+  });
+
+  it('returns null for a malformed successful TMDB search response', async () => {
+    const logger = new Logger('test');
+    const source = new TMDBSource('test-api-key', cache, logger, new RateLimiter(logger));
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        page: 1,
+        total_results: 1,
+        total_pages: 1,
+        results: { id: 1 },
+      })
+    );
+
+    await expect(source.searchMovie('Malformed')).resolves.toBeNull();
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a sparse TMDB movie when optional credits or providers are malformed', async () => {
+    const logger = new Logger('test');
+    const emitter = vi.fn();
+    logger.setEmitter(emitter);
+    logger.setLevel('warning');
+    const source = new TMDBSource('test-api-key', cache, logger, new RateLimiter(logger));
+    mockRequest
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 1,
+          title: 'Sparse Movie',
+          runtime: null,
+          genres: [],
+          production_companies: [],
+          extra_field: true,
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse({ cast: 'malformed', crew: [] }))
+      .mockResolvedValueOnce(jsonResponse({ results: {} }));
+
+    const result = await source.getMovieDetails(1);
+
+    expect(result?.title).toBe('Sparse Movie');
+    expect(result?.cast).toEqual([]);
+    expect(result?.directors).toEqual([]);
+    expect(result?.watch_providers).toEqual({});
+    const validationWarnings = emitter.mock.calls
+      .map(([entry]) => entry)
+      .filter((entry) => entry.data.action === 'response_validation_failed');
+    expect(validationWarnings.map((entry) => entry.data.endpoint)).toEqual(['/movie/1/credits']);
+    expect(validationWarnings[0].data.issues).toEqual([
+      { path: 'cast', message: 'Expected array, received string' },
+    ]);
+  });
+
+  it('logs malformed TMDB providers while keeping the primary movie result', async () => {
+    const logger = new Logger('test');
+    const emitter = vi.fn();
+    logger.setEmitter(emitter);
+    logger.setLevel('warning');
+    const source = new TMDBSource('test-api-key', cache, logger, new RateLimiter(logger));
+    mockRequest
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 2,
+          title: 'Sparse Movie',
+          runtime: null,
+          genres: [],
+          production_companies: [],
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse({ cast: [], crew: [] }))
+      .mockResolvedValueOnce(jsonResponse({ results: [] }));
+
+    const result = await source.getMovieDetails(2);
+
+    expect(result?.title).toBe('Sparse Movie');
+    const validationWarnings = emitter.mock.calls
+      .map(([entry]) => entry)
+      .filter((entry) => entry.data.action === 'response_validation_failed');
+    expect(validationWarnings.map((entry) => entry.data.endpoint)).toEqual([
+      '/movie/2/watch/providers',
+    ]);
+  });
+
+  it('returns null for a malformed successful Open Library search response', async () => {
+    const logger = new Logger('test');
+    const source = new OpenLibrarySource(cache, logger, new RateLimiter(logger));
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        numFound: 1,
+        start: 0,
+        docs: { key: '/works/1' },
+      })
+    );
+
+    await expect(source.searchByTitleAuthor('Malformed')).resolves.toBeNull();
+  });
+
+  it('accepts sparse Open Library ISBN data with extra fields', async () => {
+    const logger = new Logger('test');
+    const source = new OpenLibrarySource(cache, logger, new RateLimiter(logger));
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        title: 'Sparse Book',
+        unexpected_field: 'preserved upstream data',
+      })
+    );
+
+    const result = await source.searchByISBN('1234567890');
+
+    expect(result?.title).toBe('Sparse Book');
+    expect(result?.isbn_10).toBe('1234567890');
+    expect(result?.source).toBe('open_library');
+  });
+
+  it('accepts nullable Open Library ISBN metadata and caches the valid book', async () => {
+    const logger = new Logger('test');
+    const source = new OpenLibrarySource(cache, logger, new RateLimiter(logger));
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        title: 'Nullable Book',
+        publishers: null,
+        publish_date: null,
+        number_of_pages: null,
+        isbn_10: null,
+        isbn_13: null,
+        covers: null,
+        description: null,
+        works: null,
+        authors: null,
+      })
+    );
+
+    const firstResult = await source.searchByISBN('1234567890');
+    const cachedResult = await source.searchByISBN('1234567890');
+
+    expect(firstResult?.title).toBe('Nullable Book');
+    expect(cachedResult?.title).toBe('Nullable Book');
+    expect(cachedResult?.isbn_10).toBe('1234567890');
+    expect(cachedResult?.source).toBe('open_library');
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts nullable Open Library work metadata and caches the valid work', async () => {
+    const logger = new Logger('test');
+    const source = new OpenLibrarySource(cache, logger, new RateLimiter(logger));
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        title: 'Nullable Work',
+        description: null,
+        subjects: null,
+        subject_places: null,
+        subject_people: null,
+        subject_times: null,
+        covers: null,
+      })
+    );
+
+    const firstResult = await source.getWorkDetails('/works/nullable');
+    const cachedResult = await source.getWorkDetails('/works/nullable');
+
+    expect(firstResult).toEqual({ description: undefined, subjects: undefined });
+    expect(cachedResult?.description).toBeUndefined();
+    expect(cachedResult?.subjects).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns null for an Open Library ISBN response without its required title', async () => {
+    const logger = new Logger('test');
+    const source = new OpenLibrarySource(cache, logger, new RateLimiter(logger));
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        publishers: null,
+        description: null,
+      })
+    );
+
+    await expect(source.searchByISBN('1234567890')).resolves.toBeNull();
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns null for a malformed successful Google Books response', async () => {
+    const logger = new Logger('test');
+    const source = new GoogleBooksSource(null, cache, logger, new RateLimiter(logger));
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        kind: 'books#volumes',
+        totalItems: 1,
+        items: { id: 'not-an-array' },
+      })
+    );
+
+    await expect(source.searchByISBN('1234567890')).resolves.toBeNull();
+  });
+
+  it('accepts sparse Google Books volume data with extra fields', async () => {
+    const logger = new Logger('test');
+    const source = new GoogleBooksSource(null, cache, logger, new RateLimiter(logger));
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        kind: 'books#volumes',
+        totalItems: 1,
+        items: [
+          {
+            id: 'sparse-volume',
+            volumeInfo: { title: 'Sparse Book', extra_field: { source: 'test' } },
+          },
+        ],
+      })
+    );
+
+    const result = await source.searchByISBN('1234567890');
+
+    expect(result?.title).toBe('Sparse Book');
+    expect(result?.identifier).toBe('sparse-volume');
+    expect(result?.source).toBe('google_books');
+  });
+
+  it('returns null before Cheerio for a non-string Goodreads response', async () => {
+    const logger = new Logger('test');
+    const source = new GoodreadsSource(
+      { enabled: true, delayMs: 0 },
+      cache,
+      logger,
+      new RateLimiter(logger)
+    );
+    mockRequest.mockResolvedValueOnce(jsonResponse({ html: '<html />' }));
+
+    await expect(source.getBookDetails('1')).resolves.toBeNull();
+  });
+
+  it('accepts sparse Goodreads HTML', async () => {
+    const logger = new Logger('test');
+    const source = new GoodreadsSource(
+      { enabled: true, delayMs: 0 },
+      cache,
+      logger,
+      new RateLimiter(logger)
+    );
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse('<html><h1 class="seriesTitle">Sparse Series</h1></html>')
+    );
+
+    const result = await source.getSeriesInfo('1');
+
+    expect(result?.name).toBe('Sparse Series');
+    expect(result?.seriesId).toBe('1');
+  });
+
+  it('returns null for malformed successful Hardcover GraphQL data', async () => {
+    const logger = new Logger('test');
+    const source = new HardcoverSource(
+      { apiKey: 'test-api-key' },
+      cache,
+      logger,
+      new RateLimiter(logger)
+    );
+    mockRequest.mockResolvedValueOnce(
+      jsonResponse({
+        data: { search: { results: { hits: { document: {} } } } },
+      })
+    );
+
+    await expect(source.searchByTitleAuthor('Malformed')).resolves.toBeNull();
+  });
+
+  it('accepts sparse Hardcover book data with extra fields', async () => {
+    const logger = new Logger('test');
+    const source = new HardcoverSource(
+      { apiKey: 'test-api-key' },
+      cache,
+      logger,
+      new RateLimiter(logger)
+    );
+    mockRequest
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            search: {
+              results: {
+                hits: [
+                  {
+                    document: {
+                      id: 1,
+                      title: 'Sparse Book',
+                      slug: 'sparse-book',
+                      extra_field: true,
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            books: [
+              {
+                id: 1,
+                title: 'Sparse Book',
+                slug: 'sparse-book',
+                extra_field: true,
+              },
+            ],
+          },
+        })
+      );
+
+    const result = await source.searchByTitleAuthor('Sparse Book');
+
+    expect(result?.title).toBe('Sparse Book');
+    expect(result?.identifier).toBe('1');
+    expect(result?.source).toBe('hardcover');
+  });
+
+  it.each([
+    ['a nullable image URL', { image: { url: null } }, 'cover_url'],
+    [
+      'a nullable series relation',
+      {
+        book_series: [{ series: null, position: null }],
+      },
+      'series',
+    ],
+    [
+      'a nullable contribution author',
+      {
+        contributions: [{ author: null }],
+      },
+      'authors',
+    ],
+  ])('accepts Hardcover source data with %s', async (_label, nullableField, expectedField) => {
+    const logger = new Logger('test');
+    const source = new HardcoverSource(
+      { apiKey: 'test-api-key' },
+      cache,
+      logger,
+      new RateLimiter(logger)
+    );
+    mockRequest
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            search: {
+              results: {
+                hits: [
+                  {
+                    document: { id: 3, title: 'Nullable Book', slug: 'nullable-book' },
+                  },
+                ],
+              },
+            },
+          },
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            books: [
+              {
+                id: 3,
+                title: 'Nullable Book',
+                slug: 'nullable-book',
+                [Object.keys(nullableField)[0]]: Object.values(nullableField)[0],
+              },
+            ],
+          },
+        })
+      );
+
+    const result = await source.searchByTitleAuthor('Nullable Book');
+
+    expect(result?.title).toBe('Nullable Book');
+    expect(result?.source).toBe('hardcover');
+    if (expectedField === 'cover_url') expect(result?.cover_url).toBeNull();
+    if (expectedField === 'series') expect(result?.series).toBeUndefined();
+    if (expectedField === 'authors') expect(result?.authors).toEqual([]);
+  });
+});
