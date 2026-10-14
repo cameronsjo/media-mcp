@@ -111,6 +111,16 @@ export class GoodreadsSource {
       const bookLink = $('a[href*="/book/show/"]').first().attr('href');
 
       if (!bookLink) {
+        if (this.isEmptySearchResultsPage($)) {
+          this.logger.debug('goodreads', {
+            action: 'search_no_results',
+            title,
+            author,
+            message: 'Goodreads search returned a recognized empty-results page',
+          });
+          return null;
+        }
+
         this.logger.warning('goodreads', {
           action: 'search_selectors_empty',
           title,
@@ -411,6 +421,59 @@ export class GoodreadsSource {
       totalBooks: null,
       seriesId: seriesId || '',
     };
+  }
+
+  /**
+   * Distinguish a normal zero-result search from a page whose result layout
+   * changed. Empty-state selectors and copy are intentionally narrow so an
+   * unrelated HTML response still produces a warning.
+   */
+  private isEmptySearchResultsPage($: cheerio.CheerioAPI): boolean {
+    const explicitSearchResults = $(
+      '#searchResults, .searchResults, table.tableList, [data-testid="search-results"], [data-testid="searchResults"]'
+    ).first();
+    const searchResults =
+      explicitSearchResults.length > 0
+        ? explicitSearchResults
+        : $('.leftContainer')
+            .filter((_, element) => {
+              const container = $(element);
+              return (
+                container.find(
+                  'form[name="searchForm"][action="/search"], form[action="/search"], input#search_query_main'
+                ).length > 0
+              );
+            })
+            .first();
+
+    if (searchResults.length === 0) {
+      return false;
+    }
+
+    const hasSearchContext =
+      searchResults.find(
+        '.searchResults__header, .searchResults__title, [data-testid="search-query"], [data-testid="searchQuery"]'
+      ).length > 0 ||
+      searchResults.find(
+        'form[name="searchForm"][action="/search"], form[action="/search"], input#search_query_main, input[name="q"], input[name="query"]'
+      ).length > 0;
+
+    if (!hasSearchContext) {
+      return false;
+    }
+
+    const hasEmptyStateSelector =
+      searchResults.find(
+        '[data-testid="search-no-results"], [data-testid="searchNoResults"], .searchNoResults, .searchResults__empty, h3.searchSubNavContainer'
+      ).length > 0;
+
+    const pageText = searchResults.text().replace(/\s+/g, ' ').trim();
+    return (
+      hasEmptyStateSelector &&
+      /(?:no results?\b|no books?\b|nothing found|couldn['’]t find (?:any )?books?|didn['’]t find (?:any )?books?)/i.test(
+        pageText
+      )
+    );
   }
 
   /**

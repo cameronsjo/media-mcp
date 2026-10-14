@@ -101,6 +101,43 @@ describe('GoodreadsSource', () => {
     ).toHaveLength(1);
   });
 
+  it('keeps a recognized zero-result search silent at warning level', async () => {
+    const emitter = vi.fn();
+    logger.setEmitter(emitter);
+    logger.setLevel('debug');
+    mockHtml(fixture('empty-search-results.html'));
+
+    const result = await source.searchBook('Unavailable title');
+
+    expect(result).toBeNull();
+    expect(
+      emitter.mock.calls.map((call) => call[0]).filter((entry) => entry.level === 'warning')
+    ).toHaveLength(0);
+    expect(
+      emitter.mock.calls
+        .map((call) => call[0])
+        .filter((entry) => entry.level === 'debug' && entry.data.action === 'search_no_results')
+    ).toHaveLength(1);
+  });
+
+  it('warns when empty-result copy appears without validated search context', async () => {
+    const emitter = vi.fn();
+    logger.setEmitter(emitter);
+    logger.setLevel('warning');
+    mockHtml(fixture('unrelated-empty-state.html'));
+
+    const result = await source.searchBook('Unexpected response');
+
+    expect(result).toBeNull();
+    expect(
+      emitter.mock.calls
+        .map((call) => call[0])
+        .filter(
+          (entry) => entry.level === 'warning' && entry.data.action === 'search_selectors_empty'
+        )
+    ).toHaveLength(1);
+  });
+
   it('warns when detail selectors find no usable fields and preserves partial result semantics', async () => {
     const emitter = vi.fn();
     logger.setEmitter(emitter);
