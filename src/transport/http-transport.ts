@@ -48,22 +48,38 @@ export class StreamableHTTPTransport {
     // Must follow every route, including operational extensions, so Express
     // cannot replace application errors with an HTML stack-trace response.
     this.app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
+      this.logger.error('http-transport', {
+        action: 'handler_error',
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       if (res.headersSent) {
         next(error);
         return;
       }
-      const tooLarge =
-        typeof error === 'object' &&
-        error !== null &&
-        'type' in error &&
-        error.type === 'entity.too.large';
-      this.logger.error('http-transport', { action: 'handler_error' });
-      res.status(tooLarge ? 413 : 500).json({
+      const details = typeof error === 'object' && error !== null ? error : {};
+      const parseFailed = 'type' in details && details.type === 'entity.parse.failed';
+      const tooLarge = 'type' in details && details.type === 'entity.too.large';
+      const status =
+        'status' in details &&
+        typeof details.status === 'number' &&
+        Number.isInteger(details.status) &&
+        details.status >= 400 &&
+        details.status < 500
+          ? details.status
+          : 500;
+      res.status(status).json({
         jsonrpc: '2.0',
         id: null,
         error: {
-          code: tooLarge ? -32000 : -32603,
-          message: tooLarge ? 'Request body too large' : 'Internal server error',
+          code: parseFailed ? -32700 : status < 500 ? -32000 : -32603,
+          message: parseFailed
+            ? 'Invalid JSON body'
+            : tooLarge
+              ? 'Request body too large'
+              : status < 500
+                ? 'Invalid request body'
+                : 'Internal server error',
         },
       });
     });
@@ -121,22 +137,6 @@ export class StreamableHTTPTransport {
     });
 
     this.app.use(express.json());
-    this.app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'type' in error &&
-        error.type === 'entity.parse.failed'
-      ) {
-        res.status(400).json({
-          jsonrpc: '2.0',
-          id: null,
-          error: { code: -32700, message: 'Invalid JSON body' },
-        });
-        return;
-      }
-      next(error);
-    });
   }
 
   private setupRoutes(): void {

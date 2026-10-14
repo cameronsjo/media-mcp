@@ -360,6 +360,8 @@ The server uses SQLite for caching with the following TTLs:
 
 ## Docker
 
+To expose deliberately, replace the loopback publish address with a specific LAN address and enforce network/proxy controls; media-mcp has no authentication ([cameronsjo/media-mcp#47](https://github.com/cameronsjo/media-mcp/issues/47)).
+
 ### Build
 
 ```bash
@@ -371,7 +373,7 @@ docker build -t media-metadata-mcp .
 ```bash
 docker run -d \
   --name media-mcp \
-  -p 3000:3000 \
+  -p 127.0.0.1:3000:3000 \
   -e TMDB_API_KEY=your-key \
   -v media-mcp-cache:/app/cache \
   media-metadata-mcp
@@ -384,7 +386,7 @@ services:
   media-mcp:
     build: .
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - TMDB_API_KEY=${TMDB_API_KEY}
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY}  # optional

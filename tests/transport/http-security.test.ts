@@ -1,6 +1,6 @@
 import { createServer, request, type Server as HttpServer } from 'node:http';
 import { createMcpHandler, Server } from '@modelcontextprotocol/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { StreamableHTTPTransport } from '../../src/transport/http-transport.js';
 import { Logger } from '../../src/utils/logger.js';
 
@@ -44,6 +44,7 @@ async function startHost(
   const url = `http://127.0.0.1:${address.port}/mcp`;
   return {
     url,
+    logger,
     async close() {
       await transport.stop();
       await new Promise<void>((resolve, reject) =>
@@ -116,6 +117,7 @@ describe('HTTP Host/Origin guards', () => {
 
   it('returns sanitized JSON for route exceptions and oversized request bodies', async () => {
     const host = await startHost({}, true);
+    const logged = vi.spyOn(host.logger, 'error');
     try {
       const failed = await fetch(new URL('/api/widget', host.url));
       expect(failed.status).toBe(500);
@@ -124,6 +126,11 @@ describe('HTTP Host/Origin guards', () => {
         jsonrpc: '2.0',
         id: null,
         error: { code: -32603, message: 'Internal server error' },
+      });
+      expect(logged).toHaveBeenCalledWith('http-transport', {
+        action: 'handler_error',
+        error: 'private widget failure detail',
+        stack: expect.stringContaining('Error: private widget failure detail'),
       });
       const oversized = await fetch(host.url, {
         method: 'POST',
@@ -141,6 +148,38 @@ describe('HTTP Host/Origin guards', () => {
       await host.close();
     }
   });
+
+  it.each([
+    ['content-type', 'application/json; charset=unsupported', 'unsupported charset'],
+    ['content-encoding', 'unsupported', 'unsupported content encoding'],
+  ])(
+    'maps unsupported body-parser %s to a sanitized 415 and logs details only server-side',
+    async (header, value, detail) => {
+      const host = await startHost();
+      const logged = vi.spyOn(host.logger, 'error');
+      try {
+        const failed = await fetch(host.url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', [header]: value },
+          body: '{}',
+        });
+        expect(failed.status).toBe(415);
+        expect(failed.headers.get('content-type')).toContain('application/json');
+        expect(await failed.json()).toEqual({
+          jsonrpc: '2.0',
+          id: null,
+          error: { code: -32000, message: 'Invalid request body' },
+        });
+        expect(logged).toHaveBeenCalledWith('http-transport', {
+          action: 'handler_error',
+          error: expect.stringContaining(detail),
+          stack: expect.stringContaining(detail),
+        });
+      } finally {
+        await host.close();
+      }
+    }
+  );
 
   it('serves native clients and reflects only allowed localhost origins', async () => {
     const host = await startHost();
