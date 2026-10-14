@@ -395,17 +395,18 @@ async function main() {
       allowedOrigins: config.http.allowedOrigins,
       logger,
       handler,
-    });
-
-    // Homepage dashboard widget endpoint (flat JSON for customapi widget)
-    httpTransport.getApp().get('/api/widget', (_req, res) => {
-      const stats = cache.widgetStats();
-      res.json({
-        lookups_total: stats.lookups_total,
-        cache_hit_pct: stats.cache_hit_pct,
-        cache_size_bytes: stats.cache_size_bytes,
-        uptime_seconds: Math.floor(process.uptime()),
-      });
+      configureApp: (app) => {
+        // Register before the transport's final JSON error handler.
+        app.get('/api/widget', (_req, res) => {
+          const stats = cache.widgetStats();
+          res.json({
+            lookups_total: stats.lookups_total,
+            cache_hit_pct: stats.cache_hit_pct,
+            cache_size_bytes: stats.cache_size_bytes,
+            uptime_seconds: Math.floor(process.uptime()),
+          });
+        });
+      },
     });
 
     await httpTransport.start();

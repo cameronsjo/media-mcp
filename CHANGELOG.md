@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Migrated MCP serving to the v2 stateless SDK while retaining stdio and legacy HTTP clients
 - Stateless `GET` and `DELETE /mcp` now return HTTP 405; use `POST`.
 - Validate HTTP Host/Origin against localhost and explicit LAN allowlists; reject foreign preflights and return JSON parse errors for malformed bodies.
+- Breaking HTTP migration: LAN clients must configure `MCP_ALLOWED_HOSTS`; `/health` and `/api/widget` also apply Host/Origin guards. These guards are not authentication. Docker Compose now publishes on loopback by default.
+- Return sanitized JSON errors for HTTP handler exceptions and body-parser failures.
 
 ## [1.0.0] - 2024-12-01
 

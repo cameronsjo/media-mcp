@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { StreamableHTTPTransport } from '../../src/transport/http-transport.js';
 import { Logger } from '../../src/utils/logger.js';
 
-async function startHost(allowlists: { allowedHosts?: string[]; allowedOrigins?: string[] } = {}) {
+async function startHost(
+  allowlists: { allowedHosts?: string[]; allowedOrigins?: string[] } = {},
+  failWidget = false
+) {
   const handler = createMcpHandler(() => {
     const server = new Server(
       { name: 'security-test', version: '1.0.0' },
@@ -22,6 +25,12 @@ async function startHost(allowlists: { allowedHosts?: string[]; allowedOrigins?:
     logger,
     handler,
     ...allowlists,
+    configureApp: (app) => {
+      app.get('/api/widget', (_req, res) => {
+        if (failWidget) throw new Error('private widget failure detail');
+        res.json({ lookups_total: 0 });
+      });
+    },
   });
   // Host the actual middleware on an ephemeral listener, without adding a
   // public production API solely to expose the transport's assigned test port.
@@ -44,13 +53,13 @@ async function startHost(allowlists: { allowedHosts?: string[]; allowedOrigins?:
   };
 }
 
-function listTools(url: string, headers: Record<string, string> = {}) {
+function listTools(url: string, headers: Record<string, string> = {}, method = 'POST') {
   // Fetch rewrites Host; node:http preserves the hostile header under test.
   return new Promise<Response>((resolve, reject) => {
     const req = request(
       url,
       {
-        method: 'POST',
+        method,
         headers: {
           'content-type': 'application/json',
           accept: 'application/json, text/event-stream',
@@ -81,11 +90,58 @@ function listTools(url: string, headers: Record<string, string> = {}) {
     );
     req.on('error', reject);
     req.setTimeout(5000, () => req.destroy(new Error('HTTP guard test timed out')));
-    req.end(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }));
+    req.end(
+      method === 'POST'
+        ? JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' })
+        : undefined
+    );
   });
 }
 
 describe('HTTP Host/Origin guards', () => {
+  it('guards health and widget routes too, without treating Host as authentication', async () => {
+    const host = await startHost();
+    try {
+      for (const path of ['/health', '/api/widget']) {
+        const url = new URL(path, host.url).href;
+        expect((await listTools(url, { Host: 'evil.example' }, 'GET')).status).toBe(403);
+        expect((await listTools(url, { Origin: 'http://evil.example' }, 'GET')).status).toBe(403);
+        // Native clients can supply an allowed Host; header validation is not auth.
+        expect((await listTools(url, { Host: 'localhost' }, 'GET')).status).toBe(200);
+      }
+    } finally {
+      await host.close();
+    }
+  });
+
+  it('returns sanitized JSON for route exceptions and oversized request bodies', async () => {
+    const host = await startHost({}, true);
+    try {
+      const failed = await fetch(new URL('/api/widget', host.url));
+      expect(failed.status).toBe(500);
+      expect(failed.headers.get('content-type')).toContain('application/json');
+      expect(await failed.json()).toEqual({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32603, message: 'Internal server error' },
+      });
+      const oversized = await fetch(host.url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ payload: 'x'.repeat(110_000) }),
+      });
+      expect(oversized.status).toBe(413);
+      expect(oversized.headers.get('content-type')).toContain('application/json');
+      expect(await oversized.json()).toEqual({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32000, message: 'Request body too large' },
+      });
+    } finally {
+      await host.close();
+    }
+  });
+
   it('serves native clients and reflects only allowed localhost origins', async () => {
     const host = await startHost();
     try {

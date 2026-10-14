@@ -21,6 +21,7 @@ export interface StreamableHTTPTransportOptions {
   handler: McpHttpHandler;
   allowedHosts?: string[];
   allowedOrigins?: string[];
+  configureApp?: (app: Express) => void;
 }
 
 /**
@@ -43,6 +44,29 @@ export class StreamableHTTPTransport {
 
     this.setupMiddleware();
     this.setupRoutes();
+    this.options.configureApp?.(this.app);
+    // Must follow every route, including operational extensions, so Express
+    // cannot replace application errors with an HTML stack-trace response.
+    this.app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
+      if (res.headersSent) {
+        next(error);
+        return;
+      }
+      const tooLarge =
+        typeof error === 'object' &&
+        error !== null &&
+        'type' in error &&
+        error.type === 'entity.too.large';
+      this.logger.error('http-transport', { action: 'handler_error' });
+      res.status(tooLarge ? 413 : 500).json({
+        jsonrpc: '2.0',
+        id: null,
+        error: {
+          code: tooLarge ? -32000 : -32603,
+          message: tooLarge ? 'Request body too large' : 'Internal server error',
+        },
+      });
+    });
   }
 
   private setupMiddleware(): void {
@@ -153,7 +177,7 @@ export class StreamableHTTPTransport {
     });
   }
 
-  /** Expose the Express app for registering additional operational routes (e.g. /api/widget). */
+  /** Expose the configured app; register operational routes via configureApp. */
   getApp(): Express {
     return this.app;
   }
