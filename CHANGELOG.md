@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Consolidated CI workflows (merged test.yml into ci.yml)
 - Reserve rate-limit slots before dispatching outbound requests.
 - Migrated MCP serving to the v2 stateless SDK while retaining stdio and legacy HTTP clients
+- Stateless `GET` and `DELETE /mcp` now return HTTP 405; use `POST`.
+- Validate HTTP Host/Origin against localhost and explicit LAN allowlists; reject foreign preflights and return JSON parse errors for malformed bodies.
 
 ## [1.0.0] - 2024-12-01
 

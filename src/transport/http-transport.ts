@@ -1,7 +1,16 @@
 import type http from 'node:http';
-import express, { type Express } from 'express';
-import { toNodeHandler } from '@modelcontextprotocol/node';
-import type { McpHttpHandler } from '@modelcontextprotocol/server';
+import express, { type Express, type Request, type Response, type NextFunction } from 'express';
+import {
+  toNodeHandler,
+  hostHeaderValidation,
+  localhostHostValidation,
+  originValidation,
+} from '@modelcontextprotocol/node';
+import {
+  localhostAllowedHostnames,
+  localhostAllowedOrigins,
+  type McpHttpHandler,
+} from '@modelcontextprotocol/server';
 import { Logger } from '../utils/logger.js';
 
 export interface StreamableHTTPTransportOptions {
@@ -10,6 +19,8 @@ export interface StreamableHTTPTransportOptions {
   basePath: string;
   logger: Logger;
   handler: McpHttpHandler;
+  allowedHosts?: string[];
+  allowedOrigins?: string[];
 }
 
 /**
@@ -35,8 +46,6 @@ export class StreamableHTTPTransport {
   }
 
   private setupMiddleware(): void {
-    this.app.use(express.json());
-
     // Request logging
     this.app.use((req, res, next) => {
       const start = Date.now();
@@ -51,10 +60,29 @@ export class StreamableHTTPTransport {
       next();
     });
 
-    // CORS for browser clients
+    // Validate before body parsing or CORS/preflight handling: rejecting only
+    // POSTs would leave browser preflight and operational routes unprotected.
+    const validateHost = this.options.allowedHosts
+      ? hostHeaderValidation([
+          ...new Set([...localhostAllowedHostnames(), ...this.options.allowedHosts]),
+        ])
+      : localhostHostValidation();
+    const validateOrigin = originValidation([
+      ...new Set([...localhostAllowedOrigins(), ...(this.options.allowedOrigins ?? [])]),
+    ]);
     this.app.use((req, res, next) => {
-      res.header('Access-Control-Allow-Origin', '*');
-      res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+      if (!validateHost(req, res) || !validateOrigin(req, res)) return;
+      next();
+    });
+
+    // Only reflect an Origin that passed the SDK allowlist above. Requests
+    // without Origin remain available to non-browser MCP clients.
+    this.app.use((req, res, next) => {
+      res.vary('Origin');
+      if (typeof req.headers.origin === 'string' && req.headers.origin) {
+        res.header('Access-Control-Allow-Origin', req.headers.origin);
+      }
+      res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       res.header(
         'Access-Control-Allow-Headers',
         'Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Mcp-Method, Mcp-Name'
@@ -66,6 +94,24 @@ export class StreamableHTTPTransport {
         return;
       }
       next();
+    });
+
+    this.app.use(express.json());
+    this.app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'type' in error &&
+        error.type === 'entity.parse.failed'
+      ) {
+        res.status(400).json({
+          jsonrpc: '2.0',
+          id: null,
+          error: { code: -32700, message: 'Invalid JSON body' },
+        });
+        return;
+      }
+      next(error);
     });
   }
 

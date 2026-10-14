@@ -1,15 +1,17 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, execFile, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const serverEntrypoint = resolve(repoRoot, 'dist/index.js');
 const smokeTimeoutMs = 20_000;
+const execFileAsync = promisify(execFile);
 
 const expectedToolNames = [
   'batch_lookup',
@@ -249,6 +251,15 @@ async function connectStdio(
 }
 
 describe('built transport smoke test', () => {
+  beforeAll(async () => {
+    // Always build the artifact under test: a fresh checkout has no dist/, and
+    // an existing output directory can be stale after a source change.
+    await execFileAsync(process.execPath, [resolve(repoRoot, 'node_modules/typescript/bin/tsc')], {
+      cwd: repoRoot,
+      timeout: 25_000,
+    });
+  });
+
   it('serves modern and legacy clients over stateless stdio and HTTP', async () => {
     expect(existsSync(serverEntrypoint)).toBe(true);
     const deadline = Date.now() + smokeTimeoutMs;
@@ -335,7 +346,7 @@ describe('built transport smoke test', () => {
       expect(modernToolCall).toBeDefined();
       expect(modernToolCall?.request.headers.has('mcp-name')).toBe(true);
 
-      const cors = await fetch(url, {
+      const foreignOrigin = await fetch(url, {
         method: 'OPTIONS',
         headers: {
           Origin: 'http://example.test',
@@ -343,8 +354,41 @@ describe('built transport smoke test', () => {
           'Access-Control-Request-Headers': 'content-type,mcp-protocol-version,mcp-method,mcp-name',
         },
       });
+      expect(foreignOrigin.status).toBe(403);
+      expect(foreignOrigin.headers.get('access-control-allow-origin')).toBeNull();
+      expect(await foreignOrigin.json()).toMatchObject({
+        error: { code: -32000, message: expect.stringContaining('Invalid Origin') },
+      });
+
+      const cors = await fetch(url, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'http://localhost:4173',
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'content-type,mcp-protocol-version,mcp-method,mcp-name',
+        },
+      });
       expect(cors.status).toBe(204);
+      expect(cors.headers.get('access-control-allow-origin')).toBe('http://localhost:4173');
       expect(cors.headers.get('access-control-allow-headers')).toContain('Mcp-Protocol-Version');
+
+      const malformed = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{"incomplete":',
+      });
+      expect(malformed.status).toBe(400);
+      expect(malformed.headers.get('content-type')).toContain('application/json');
+      expect(await malformed.json()).toEqual({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32700, message: 'Invalid JSON body' },
+      });
+
+      for (const method of ['GET', 'DELETE']) {
+        const unsupported = await fetch(url, { method });
+        expect(unsupported.status).toBe(405);
+      }
 
       const modernListRequest = modernExchanges.find(
         (exchange) => exchange.request.headers.get('mcp-method') === 'tools/list'

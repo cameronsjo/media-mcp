@@ -141,6 +141,17 @@ TMDB_API_KEY=your-key node dist/index.js --transport http
 
 Connect your MCP client to `http://127.0.0.1:3000/mcp`
 
+HTTP requests validate Host and Origin before parsing or dispatch. By default,
+only `localhost`, `127.0.0.1`, and `[::1]` are trusted; native clients may omit
+Origin. For LAN/Docker access, set `MCP_ALLOWED_HOSTS=media.internal` and, for
+browser clients, `MCP_ALLOWED_ORIGINS=ui.internal`. These comma-separated
+hostname lists extend localhost access; use hostnames only, without schemes,
+ports, paths, or wildcards. Invalid or empty configured lists fail startup.
+Binding `MCP_HTTP_HOST=0.0.0.0` does not itself authorize remote hosts or origins.
+CORS reflects only a validated Origin, and foreign-origin preflights are rejected.
+Malformed JSON returns a JSON-RPC parse error, without an HTML stack trace.
+`GET` and `DELETE /mcp` return HTTP 405; stateless requests use `POST`.
+
 HTTP serving uses the MCP v2 stateless SDK: modern clients send each request
 with its protocol envelope and do not need an `initialize` handshake or
 `Mcp-Session-Id`. The same endpoint keeps the SDK's stateless legacy

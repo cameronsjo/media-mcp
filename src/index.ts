@@ -48,6 +48,8 @@ const config = {
     port: appConfig.httpPort,
     host: appConfig.httpHost,
     basePath: appConfig.httpPath,
+    allowedHosts: appConfig.httpAllowedHosts,
+    allowedOrigins: appConfig.httpAllowedOrigins,
   },
   apis: {
     tmdb: {
@@ -100,6 +102,8 @@ Environment Variables:
     MCP_HTTP_PORT                 HTTP server port (default: 3000)
     MCP_HTTP_HOST                 HTTP server host (default: 127.0.0.1)
     MCP_HTTP_PATH                 HTTP endpoint path (default: /mcp)
+    MCP_ALLOWED_HOSTS             Additional allowed Host hostnames (comma-separated)
+    MCP_ALLOWED_ORIGINS           Additional allowed Origin hostnames (comma-separated)
 
   Cache:
     MCP_CACHE_ENABLED             Enable caching (default: true)
@@ -259,7 +263,7 @@ function createMcpServer(emitStdioLogs: boolean): Server {
   server.setRequestHandler('tools/list', async () => handlers.listTools());
   server.setRequestHandler('logging/setLevel', async (request) => {
     const level = request.params.level as LogLevel;
-    return handlers.setLevel(level, emitStdioLogs);
+    return handlers.setLevel(level, true);
   });
   server.setRequestHandler('tools/call', async (request) => {
     const { name, arguments: args } = request.params;
@@ -385,6 +389,8 @@ async function main() {
       port: config.http.port,
       host: config.http.host,
       basePath: config.http.basePath,
+      allowedHosts: config.http.allowedHosts,
+      allowedOrigins: config.http.allowedOrigins,
       logger,
       handler,
     });
