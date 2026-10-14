@@ -44,6 +44,12 @@ describe('stringSimilarity', () => {
     expect(stringSimilarity('The Hobbit!', 'the hobbit')).toBe(1);
   });
 
+  it('preserves meaningful Unicode characters during comparison', () => {
+    expect(stringSimilarity('日本語', '中文')).not.toBe(1);
+    expect(stringSimilarity('日本語', '日本文')).toBeCloseTo(2 / 3);
+    expect(stringSimilarity('日本語', '日本語')).toBe(1);
+  });
+
   it('returns zero when only one normalized input is empty', () => {
     expect(stringSimilarity('!!!', 'book')).toBe(0);
   });
@@ -166,11 +172,43 @@ describe('extractSeriesFromTitle', () => {
     });
   });
 
-  it('keeps the title and series order for a series-prefix pattern', () => {
+  it('keeps a colon subtitle as the complete title for a Book pattern', () => {
     expect(extractSeriesFromTitle('Shadows of London: The Shadow (Book 2)')).toEqual({
-      cleanTitle: 'The Shadow',
-      seriesName: 'Shadows of London',
+      cleanTitle: 'Shadows of London: The Shadow',
+      seriesName: null,
       seriesPosition: 2,
+    });
+  });
+
+  it('keeps a colon subtitle in the complete title for the Dune Book pattern', () => {
+    expect(extractSeriesFromTitle('Dune: Messiah (Book 2)')).toEqual({
+      cleanTitle: 'Dune: Messiah',
+      seriesName: null,
+      seriesPosition: 2,
+    });
+  });
+
+  it('extracts a series from a hyphenated Series Book pattern', () => {
+    expect(extractSeriesFromTitle('Book Name - Series Book 1')).toEqual({
+      cleanTitle: 'Book Name',
+      seriesName: 'Series',
+      seriesPosition: 1,
+    });
+  });
+
+  it('extracts a series from a Part of Series pattern', () => {
+    expect(extractSeriesFromTitle('Book Name, Part 1 of Series')).toEqual({
+      cleanTitle: 'Book Name',
+      seriesName: 'Series',
+      seriesPosition: 1,
+    });
+  });
+
+  it('extracts a series from a standalone Part of Series pattern', () => {
+    expect(extractSeriesFromTitle('Part 1 of Series')).toEqual({
+      cleanTitle: 'Part 1',
+      seriesName: 'Series',
+      seriesPosition: 1,
     });
   });
 
