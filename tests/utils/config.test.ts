@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ZodError } from 'zod';
 import {
   ConfigSchema,
   getSourceStatusMessage,
@@ -31,6 +32,22 @@ const CONFIG_ENV_KEYS = [
 function clearConfigEnv(): void {
   for (const key of CONFIG_ENV_KEYS) {
     vi.stubEnv(key, undefined);
+  }
+}
+
+function expectValidationIssue(action: () => unknown, path: string, message: string): void {
+  let caught: unknown;
+  try {
+    action();
+  } catch (error) {
+    caught = error;
+  }
+
+  expect(caught).toBeInstanceOf(ZodError);
+  if (caught instanceof ZodError) {
+    expect(caught.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: [path], message })])
+    );
   }
 }
 
@@ -161,14 +178,30 @@ describe('configuration', () => {
 
   it('rejects invalid transport, log level, and schema value types', () => {
     vi.stubEnv('MCP_TRANSPORT', 'websocket');
-    expect(() => loadConfig()).toThrow();
+    expectValidationIssue(
+      () => loadConfig(),
+      'transport',
+      "Invalid enum value. Expected 'stdio' | 'http', received 'websocket'"
+    );
 
     vi.stubEnv('MCP_TRANSPORT', undefined);
     vi.stubEnv('MCP_LOG_LEVEL', 'trace');
-    expect(() => loadConfig()).toThrow();
+    expectValidationIssue(
+      () => loadConfig(),
+      'logLevel',
+      "Invalid enum value. Expected 'debug' | 'info' | 'warn' | 'error', received 'trace'"
+    );
 
-    expect(() => ConfigSchema.parse({ cacheEnabled: 'true' })).toThrow();
-    expect(() => ConfigSchema.parse({ httpPort: '3000' })).toThrow();
+    expectValidationIssue(
+      () => ConfigSchema.parse({ cacheEnabled: 'true' }),
+      'cacheEnabled',
+      'Expected boolean, received string'
+    );
+    expectValidationIssue(
+      () => ConfigSchema.parse({ httpPort: '3000' }),
+      'httpPort',
+      'Expected number, received string'
+    );
   });
 
   it('formats a message with only available sources', () => {
