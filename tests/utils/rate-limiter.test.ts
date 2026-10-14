@@ -153,6 +153,24 @@ describe('RateLimiter', () => {
       vi.useRealTimers();
     });
 
+    it('does not shorten an existing backoff when a concurrent lower attempt signals', async () => {
+      rateLimiter.configure('test', { requestsPerWindow: 10, windowMs: 10000 });
+      expect(rateLimiter.triggerBackoff('test', 3)).toBe(8000);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(rateLimiter.triggerBackoff('test', 1)).toBe(2000);
+      expect(rateLimiter.getWaitTime('test')).toBe(7000);
+
+      let acquired = false;
+      const slot = rateLimiter.acquireSlot('test').then(() => {
+        acquired = true;
+      });
+      await vi.advanceTimersByTimeAsync(6999);
+      expect(acquired).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await slot;
+      expect(acquired).toBe(true);
+    });
+
     it('reserves slots before concurrent callers continue', async () => {
       rateLimiter.configure('test', { requestsPerWindow: 2, windowMs: 1000 });
 

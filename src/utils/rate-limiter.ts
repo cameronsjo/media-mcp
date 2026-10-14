@@ -81,7 +81,7 @@ export class RateLimiter {
 
     // Exponential backoff: 2^attempt seconds (2s, 4s, 8s, 16s, 32s, max 60s)
     const backoffMs = Math.min(Math.pow(2, attempt) * 1000, 60000);
-    state.backoffUntil = Date.now() + backoffMs;
+    state.backoffUntil = Math.max(state.backoffUntil, Date.now() + backoffMs);
 
     this.logger.warning('rate-limiter', {
       action: 'backoff_triggered',
