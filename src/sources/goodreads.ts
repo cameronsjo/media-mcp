@@ -111,11 +111,13 @@ export class GoodreadsSource {
       const bookLink = $('a[href*="/book/show/"]').first().attr('href');
 
       if (!bookLink) {
-        this.logger.debug('goodreads', {
-          action: 'search_no_book_links',
+        this.logger.warning('goodreads', {
+          action: 'search_selectors_empty',
           title,
           author,
-          message: 'No a[href*="/book/show/"] found on search results page',
+          selector: 'a[href*="/book/show/"]',
+          message:
+            'No Goodreads book link matched on the search results page; the response may use an unexpected layout',
         });
         return null;
       }
@@ -169,8 +171,7 @@ export class GoodreadsSource {
 
       // Extract rating — try multiple selectors (modern → legacy)
       const ratingText =
-        $('.RatingStatistics__rating').text().trim() ||
-        $('[itemprop="ratingValue"]').text().trim();
+        $('.RatingStatistics__rating').text().trim() || $('[itemprop="ratingValue"]').text().trim();
       // Look for rating count in page text
       const pageText = $.text();
       const ratingCountMatch = pageText.match(/([\d,]+)\s*ratings/);
@@ -233,8 +234,7 @@ export class GoodreadsSource {
 
       // Extract page count — look for "N pages" pattern in text
       const pageCountText =
-        $('[data-testid="pagesFormat"]').text() ||
-        $('[itemprop="numberOfPages"]').text();
+        $('[data-testid="pagesFormat"]').text() || $('[itemprop="numberOfPages"]').text();
       let pageCount: number | null = null;
       if (pageCountText) {
         pageCount = parseInt(pageCountText.replace(/[^\d]/g, ''), 10);
@@ -259,6 +259,26 @@ export class GoodreadsSource {
         $('.BookCover__image img').attr('src') ||
         $('[itemprop="image"]').attr('content') ||
         null;
+
+      const usableFields = [
+        Number.isFinite(rating) && Number.isFinite(ratingCount) ? 'rating' : null,
+        genres.length > 0 ? 'genres' : null,
+        shelves.length > 0 ? 'shelves' : null,
+        seriesInfo ? 'series' : null,
+        Number.isFinite(pageCount) ? 'page_count' : null,
+        description ? 'description' : null,
+        coverUrl ? 'cover_url' : null,
+      ].filter((field): field is string => field !== null);
+
+      if (usableFields.length === 0) {
+        this.logger.warning('goodreads', {
+          action: 'detail_selectors_empty',
+          bookId,
+          message:
+            'No usable Goodreads detail fields matched; optional fields may be absent, but this response may use an unexpected layout',
+          usable_fields: usableFields,
+        });
+      }
 
       const result: PartialBookData = {
         rating: rating && ratingCount ? { score: rating, count: ratingCount } : undefined,
@@ -335,6 +355,15 @@ export class GoodreadsSource {
         totalBooks: bookItems || null,
         seriesId,
       };
+
+      if (!seriesName) {
+        this.logger.warning('goodreads', {
+          action: 'series_selectors_empty',
+          seriesId,
+          selector: 'h1.seriesTitle, .responsiveSeriesHeader__title',
+          message: 'No Goodreads series name matched; the response may use an unexpected layout',
+        });
+      }
 
       this.cache.set(cacheKey, result, SOURCE, CacheTTL.SERIES_INFO);
 
