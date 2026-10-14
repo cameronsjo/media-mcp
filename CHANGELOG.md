@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Consolidated CI workflows (merged test.yml into ci.yml)
 - Updated grouped dependency security fixes and migrated telemetry initialization to OpenTelemetry 2 APIs
+- Aligned the declared Node minimum with the production dependency requirement of 20.18.1
 
 ## [1.0.0] - 2024-12-01
 
