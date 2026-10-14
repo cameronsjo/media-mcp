@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SQLiteCache, CacheTTL } from '../../src/cache/sqlite-cache.js';
 import { Logger } from '../../src/utils/logger.js';
 import * as fs from 'fs';
@@ -15,6 +15,7 @@ describe('SQLiteCache', () => {
         path: testDbPath,
         defaultTTLHours: 24,
         enabled: true,
+        cleanupIntervalMs: 60 * 60 * 1000,
       },
       logger
     );
@@ -213,7 +214,7 @@ describe('SQLiteCache', () => {
 
     it('should return zeros when cache is disabled', () => {
       const disabledCache = new SQLiteCache(
-        { path: ':memory:', defaultTTLHours: 24, enabled: false },
+        { path: ':memory:', defaultTTLHours: 24, enabled: false, cleanupIntervalMs: 1000 },
         logger
       );
 
@@ -233,6 +234,7 @@ describe('SQLiteCache', () => {
           path: ':memory:',
           defaultTTLHours: 24,
           enabled: false,
+          cleanupIntervalMs: 1000,
         },
         logger
       );
@@ -242,6 +244,90 @@ describe('SQLiteCache', () => {
 
       expect(result).toBeNull();
       disabledCache.close();
+    });
+  });
+
+  describe('periodic cleanup', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('removes expired entries and preserves unexpired entries', () => {
+      const periodicCache = new SQLiteCache(
+        {
+          path: ':memory:',
+          defaultTTLHours: 24,
+          enabled: true,
+          cleanupIntervalMs: 1000,
+        },
+        logger
+      );
+
+      const info = vi.spyOn(logger, 'info');
+      const debug = vi.spyOn(logger, 'debug');
+      periodicCache.set('test:expired', { data: 'old' }, 'test', 0.0001);
+      periodicCache.set('test:fresh', { data: 'new' }, 'test', 24);
+
+      vi.advanceTimersByTime(500);
+      expect(periodicCache.getStale('test:expired')?.stale).toBe(true);
+      expect(periodicCache.getStale('test:fresh')?.stale).toBe(false);
+
+      vi.advanceTimersByTime(500);
+      expect(periodicCache.getStale('test:expired')).toBeNull();
+      expect(periodicCache.get('test:fresh')?.value).toEqual({ data: 'new' });
+      expect(debug).toHaveBeenCalledWith('cache', { action: 'cleanup', deleted: 1 });
+      expect(info).not.toHaveBeenCalled();
+
+      periodicCache.close();
+    });
+
+    it('stops scheduling cleanup after close', () => {
+      const periodicCache = new SQLiteCache(
+        { path: ':memory:', defaultTTLHours: 24, enabled: true, cleanupIntervalMs: 1000 },
+        logger
+      );
+      const cleanup = vi.spyOn(periodicCache, 'cleanup');
+
+      periodicCache.close();
+      vi.advanceTimersByTime(5000);
+
+      expect(cleanup).not.toHaveBeenCalled();
+    });
+
+    it('does not schedule a timer for a disabled cache', () => {
+      const disabledCache = new SQLiteCache(
+        { path: ':memory:', defaultTTLHours: 24, enabled: false, cleanupIntervalMs: 1000 },
+        logger
+      );
+
+      expect(vi.getTimerCount()).toBe(0);
+      disabledCache.close();
+    });
+
+    it('logs cleanup callback failures without escaping the timer', () => {
+      const events: Array<{ level: string; data: Record<string, unknown> }> = [];
+      logger.setLevel('debug');
+      logger.setEmitter((entry) => events.push(entry));
+      const periodicCache = new SQLiteCache(
+        { path: ':memory:', defaultTTLHours: 24, enabled: true, cleanupIntervalMs: 1000 },
+        logger
+      );
+      vi.spyOn(periodicCache, 'cleanup').mockImplementation(() => {
+        throw new Error('database closed');
+      });
+
+      expect(() => vi.advanceTimersByTime(1000)).not.toThrow();
+      expect(
+        events.some(
+          (event) => event.level === 'error' && event.data.action === 'scheduled_cleanup_failed'
+        )
+      ).toBe(true);
+
+      periodicCache.close();
     });
   });
 });
