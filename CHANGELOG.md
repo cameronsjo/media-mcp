@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Goodreads scraping now emits warning diagnostics when search or detail selectors produce no usable data.
+
 ### Added
 
 - Docker Compose for local and homelab deployment
