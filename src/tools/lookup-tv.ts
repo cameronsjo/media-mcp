@@ -1,3 +1,4 @@
+import { NotFoundError, SourceError } from '../utils/errors.js';
 import { z } from 'zod';
 import type { TVResult, LookupTVInput } from '../types/tv.js';
 import { TMDBSource } from '../sources/tmdb.js';
@@ -5,14 +6,21 @@ import { Logger } from '../utils/logger.js';
 
 export const LookupTVInputSchema = z.object({
   title: z.string().min(1).describe('TV show title to search for'),
-  year: z.number().int().min(1900).max(2100).optional()
+  year: z
+    .number()
+    .int()
+    .min(1900)
+    .max(2100)
+    .optional()
     .describe('First air year (improves matching accuracy)'),
-  tmdb_id: z.number().int().positive().optional()
+  tmdb_id: z
+    .number()
+    .int()
+    .positive()
+    .optional()
     .describe('TMDB ID if known (preferred for exact match)'),
-  include_seasons: z.boolean().default(true)
-    .describe('Include season information'),
-  include_episodes: z.boolean().default(false)
-    .describe('Include episode details for each season'),
+  include_seasons: z.boolean().default(true).describe('Include season information'),
+  include_episodes: z.boolean().default(false).describe('Include episode details for each season'),
 });
 
 export class LookupTVTool {
@@ -51,11 +59,9 @@ export class LookupTVTool {
           duration_ms: Date.now() - startTime,
         });
 
-        throw {
-          code: 'NOT_FOUND',
-          message: `No TV show found matching "${input.title}"${input.year ? ` (${input.year})` : ''}`,
-          retryable: false,
-        };
+        throw new NotFoundError(
+          `No TV show found matching "${input.title}"${input.year ? ` (${input.year})` : ''}`
+        );
       }
     }
 
@@ -73,12 +79,12 @@ export class LookupTVTool {
         duration_ms: Date.now() - startTime,
       });
 
-      throw {
-        code: 'SOURCE_ERROR',
-        message: `Failed to retrieve TV show details for TMDB ID ${tmdbId}`,
-        source: 'tmdb',
-        retryable: true,
-      };
+      throw new SourceError(
+        `Failed to retrieve TV show details for TMDB ID ${tmdbId}`,
+        'SOURCE_ERROR',
+        'tmdb',
+        true
+      );
     }
 
     this.logger.info('lookup-tv', {

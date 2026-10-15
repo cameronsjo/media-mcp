@@ -1,3 +1,4 @@
+import { NotFoundError, normalizeError } from '../utils/errors.js';
 import { z } from 'zod';
 import type { BookResult, PartialBookData, LookupBookInput, BookSource } from '../types/book.js';
 import { OpenLibrarySource } from '../sources/open-library.js';
@@ -124,11 +125,9 @@ export class LookupBookTool {
         duration_ms: Date.now() - startTime,
       });
 
-      throw {
-        code: 'NOT_FOUND',
-        message: `No book found matching "${input.title}"${input.author ? ` by ${input.author}` : ''}`,
-        retryable: false,
-      };
+      throw new NotFoundError(
+        `No book found matching "${input.title}"${input.author ? ` by ${input.author}` : ''}`
+      );
     }
 
     // Clean title series suffixes from every source. A parsed title from one
@@ -196,8 +195,9 @@ export class LookupBookTool {
     } catch (error) {
       this.logger.error('lookup-book', {
         action: 'source_error',
+        ...normalizeError(error),
         source: 'open_library',
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error).message,
       });
       sourcesFailed.push('open_library');
     }
@@ -234,8 +234,9 @@ export class LookupBookTool {
     } catch (error) {
       this.logger.error('lookup-book', {
         action: 'source_error',
+        ...normalizeError(error),
         source: 'google_books',
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error).message,
       });
       sourcesFailed.push('google_books');
     }
@@ -262,8 +263,9 @@ export class LookupBookTool {
     } catch (error) {
       this.logger.error('lookup-book', {
         action: 'source_error',
+        ...normalizeError(error),
         source: 'goodreads',
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error).message,
       });
       sourcesFailed.push('goodreads');
     }
@@ -298,8 +300,9 @@ export class LookupBookTool {
     } catch (error) {
       this.logger.error('lookup-book', {
         action: 'source_error',
+        ...normalizeError(error),
         source: 'hardcover',
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error).message,
       });
       sourcesFailed.push('hardcover');
     }

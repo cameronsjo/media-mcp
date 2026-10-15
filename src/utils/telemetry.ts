@@ -6,6 +6,7 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import type { Config } from './config.js';
+import { TIMING } from './constants.js';
 
 let tracerProvider: BasicTracerProvider | null = null;
 let meterProvider: MeterProvider | null = null;
@@ -54,7 +55,7 @@ export function initTelemetry(config: Config): void {
       readers: [
         new PeriodicExportingMetricReader({
           exporter: metricExporter,
-          exportIntervalMillis: 60000, // Export every minute
+          exportIntervalMillis: TIMING.TELEMETRY_EXPORT_INTERVAL_MS, // Export every minute
         }),
       ],
     });

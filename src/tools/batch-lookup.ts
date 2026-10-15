@@ -1,3 +1,5 @@
+import { normalizeError } from '../utils/errors.js';
+import type { ErrorResponse } from '../types/common.js';
 import { z } from 'zod';
 import type { BookResult } from '../types/book.js';
 import type { MovieResult } from '../types/movie.js';
@@ -12,8 +14,12 @@ const BatchBookItemSchema = z.object({
   title: z.string().min(1),
   author: z.string().optional(),
   isbn: z.string().optional(),
-  compact: z.boolean().default(true)
-    .describe('Trim each book (default): null description, drop shelves/subjects. Set false for full descriptions.'),
+  compact: z
+    .boolean()
+    .default(true)
+    .describe(
+      'Trim each book (default): null description, drop shelves/subjects. Set false for full descriptions.'
+    ),
 });
 
 const BatchMovieItemSchema = z.object({
@@ -21,10 +27,16 @@ const BatchMovieItemSchema = z.object({
   title: z.string().min(1),
   year: z.number().int().optional(),
   tmdb_id: z.number().int().optional(),
-  include_watch_providers: z.boolean().default(true)
+  include_watch_providers: z
+    .boolean()
+    .default(true)
     .describe('Include watch_providers. Set false to omit entirely.'),
-  watch_provider_regions: z.array(z.string()).default(['US'])
-    .describe('Restrict watch_providers to these ISO country codes. Defaults to ["US"]; pass [] for all regions.'),
+  watch_provider_regions: z
+    .array(z.string())
+    .default(['US'])
+    .describe(
+      'Restrict watch_providers to these ISO country codes. Defaults to ["US"]; pass [] for all regions.'
+    ),
 });
 
 const BatchTVItemSchema = z.object({
@@ -32,23 +44,15 @@ const BatchTVItemSchema = z.object({
   title: z.string().min(1),
   year: z.number().int().optional(),
   tmdb_id: z.number().int().optional(),
-  include_seasons: z.boolean().default(true)
-    .describe('Include season details in response'),
-  include_episodes: z.boolean().default(false)
-    .describe('Include episode details in response'),
+  include_seasons: z.boolean().default(true).describe('Include season details in response'),
+  include_episodes: z.boolean().default(false).describe('Include episode details in response'),
 });
 
-const BatchItemSchema = z.union([
-  BatchBookItemSchema,
-  BatchMovieItemSchema,
-  BatchTVItemSchema,
-]);
+const BatchItemSchema = z.union([BatchBookItemSchema, BatchMovieItemSchema, BatchTVItemSchema]);
 
 export const BatchLookupInputSchema = z.object({
-  items: z.array(BatchItemSchema).min(1).max(50)
-    .describe('Array of items to look up'),
-  concurrency: z.number().int().min(1).max(10).default(3)
-    .describe('Number of concurrent lookups'),
+  items: z.array(BatchItemSchema).min(1).max(50).describe('Array of items to look up'),
+  concurrency: z.number().int().min(1).max(10).default(3).describe('Number of concurrent lookups'),
 });
 
 export type BatchLookupInput = z.infer<typeof BatchLookupInputSchema>;
@@ -65,10 +69,7 @@ interface BatchResultError {
   index: number;
   type: 'book' | 'movie' | 'tv';
   success: false;
-  error: {
-    code: string;
-    message: string;
-  };
+  error: ErrorResponse['error'];
 }
 
 type BatchResult = BatchResultSuccess | BatchResultError;
@@ -117,16 +118,14 @@ export class BatchLookupTool {
     // Process items in batches
     for (let i = 0; i < input.items.length; i += concurrency) {
       const batch = input.items.slice(i, i + concurrency);
-      const batchPromises = batch.map((item, batchIndex) =>
-        this.lookupItem(item, i + batchIndex)
-      );
+      const batchPromises = batch.map((item, batchIndex) => this.lookupItem(item, i + batchIndex));
 
       const batchResults = await Promise.all(batchPromises);
       results.push(...batchResults);
     }
 
-    const successful = results.filter(r => r.success).length;
-    const failed = results.filter(r => !r.success).length;
+    const successful = results.filter((r) => r.success).length;
+    const failed = results.filter((r) => !r.success).length;
 
     this.logger.info('batch-lookup', {
       action: 'complete',
@@ -190,16 +189,11 @@ export class BatchLookupTool {
         result,
       };
     } catch (error) {
-      const errorObj = error as { code?: string; message?: string };
-
       return {
         index,
         type: item.type,
         success: false,
-        error: {
-          code: errorObj.code ?? 'UNKNOWN_ERROR',
-          message: errorObj.message ?? 'An unknown error occurred',
-        },
+        error: normalizeError(error),
       };
     }
   }

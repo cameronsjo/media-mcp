@@ -1,4 +1,6 @@
+import { normalizeError } from '../utils/errors.js';
 import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
+import { RATE_LIMITS } from '../utils/constants.js';
 import { normalizeForComparison } from '../utils/strings.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
 import type { PartialBookData, BookSource } from '../types/book.js';
@@ -29,8 +31,8 @@ export class OpenLibrarySource {
 
     // Configure rate limiting - Open Library is generous but be respectful
     rateLimiter.configure(SOURCE, {
-      requestsPerWindow: 100,
-      windowMs: 60000, // 100 requests per minute
+      requestsPerWindow: RATE_LIMITS.OPEN_LIBRARY.REQUESTS_PER_WINDOW,
+      windowMs: RATE_LIMITS.OPEN_LIBRARY.WINDOW_MS, // 100 requests per minute
     });
 
     this.client = new HttpClient(SOURCE, { baseUrl: BASE_URL }, logger, rateLimiter);
@@ -69,9 +71,10 @@ export class OpenLibrarySource {
       return result;
     } catch (error) {
       this.logger.error('open-library', {
+        ...normalizeError(error, SOURCE),
         action: 'isbn_lookup_failed',
         isbn: cleanISBN,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
       return null;
     }
@@ -138,10 +141,11 @@ export class OpenLibrarySource {
       return result;
     } catch (error) {
       this.logger.error('open-library', {
+        ...normalizeError(error, SOURCE),
         action: 'search_failed',
         title,
         author,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
       return null;
     }

@@ -1,5 +1,6 @@
 import { statSync, unlinkSync } from 'node:fs';
 import Database from 'better-sqlite3';
+import { TIMING } from '../utils/constants.js';
 import { Logger } from '../utils/logger.js';
 
 export interface CacheEntry<T = unknown> {
@@ -18,7 +19,7 @@ export interface CacheOptions {
   cleanupIntervalMs?: number;
 }
 
-export const DEFAULT_CACHE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+export const DEFAULT_CACHE_CLEANUP_INTERVAL_MS = TIMING.CACHE_CLEANUP_INTERVAL_MS;
 
 // TTL presets in hours
 export const CacheTTL = {
@@ -212,7 +213,7 @@ export class SQLiteCache {
     if (!this.enabled) return;
 
     const now = Date.now();
-    const ttl = (ttlHours ?? this.defaultTTLHours) * 60 * 60 * 1000;
+    const ttl = (ttlHours ?? this.defaultTTLHours) * TIMING.HOUR_MS;
     const expires_at = now + ttl;
 
     const stmt = this.db.prepare(`
