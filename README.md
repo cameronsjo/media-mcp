@@ -448,8 +448,8 @@ Tool failures return `isError: true` and text containing `{ "error": { "code", "
 - `AUTH_ERROR`: missing or invalid provider credentials; not retryable.
 - `RATE_LIMITED`: provider quota/backoff; retryable, optionally with a delay.
 - `TIMEOUT`: provider request timeout; retryable.
-- `SOURCE_ERROR`: other provider or unexpected execution failures; retryable unless explicitly marked otherwise.
+- `SOURCE_ERROR`: other provider or unexpected execution failures; retryable only when explicitly classified as transient. Unclassified exceptions default to `retryable: false`.
 
 Book sources and optional enrichments retain their existing `null`/empty-result fallbacks so a failed optional provider does not discard usable metadata from another source. Caught source exceptions include the common code, message, source, and retryability fields in diagnostics. Plain exceptions and unrecognized error codes normalize to `SOURCE_ERROR`; arbitrary thrown values cannot break error reporting.
 
-TMDB movie/TV primary lookup failures retain typed timeout, authentication, rate-limit, and provider errors instead of reporting a non-retryable no-match result. A genuine 404 or empty search remains a no-result result.
+TMDB movie/TV primary lookup failures retain typed timeout, authentication, rate-limit, and provider errors instead of reporting a non-retryable no-match result. A detail HTTP 404, including an explicit `tmdb_id`, becomes non-retryable `NOT_FOUND`; an empty search or search HTTP 404 retains the no-result fallback.

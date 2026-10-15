@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve non-retryable TMDB not-found errors for explicit movie/TV IDs and default unclassified exceptions to non-retryable.
+
 - Standardized tool and batch application errors on the shared error-code schema, including source and retryability metadata; preserved source fallbacks and SDK protocol errors.
 
 - Removed an unreachable series-extraction pattern and added a regression test pinning existing colon-subtitle behavior (for example, `Dune: Messiah (Book 2)`).

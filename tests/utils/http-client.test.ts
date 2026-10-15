@@ -250,7 +250,7 @@ describe('HttpClient', () => {
           message: 'network down',
           code: 'SOURCE_ERROR',
           source: 'test',
-          retryable: true,
+          retryable: false,
         });
 
         const nextRequest = client.get('/next', { retries: 1 });

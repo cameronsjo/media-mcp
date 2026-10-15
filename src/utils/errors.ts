@@ -64,7 +64,7 @@ export function normalizeError(error: unknown, source?: string): ErrorDetails {
     const retryable =
       'retryable' in value && typeof value.retryable === 'boolean'
         ? value.retryable
-        : ['SOURCE_ERROR', 'RATE_LIMITED', 'TIMEOUT'].includes(normalizedCode);
+        : ['RATE_LIMITED', 'TIMEOUT'].includes(normalizedCode);
     const retryAfter =
       'retry_after_seconds' in value &&
       typeof value.retry_after_seconds === 'number' &&
@@ -84,7 +84,7 @@ export function normalizeError(error: unknown, source?: string): ErrorDetails {
       code: 'SOURCE_ERROR',
       message: 'An unknown error occurred',
       ...(source ? { source } : {}),
-      retryable: true,
+      retryable: false,
     };
   }
 }

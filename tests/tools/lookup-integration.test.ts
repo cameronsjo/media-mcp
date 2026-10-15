@@ -575,11 +575,11 @@ describe('BatchLookupTool integration paths', () => {
     expect(result.results).toHaveLength(2);
     expect(result.results[0]).toMatchObject({
       success: false,
-      error: { code: 'SOURCE_ERROR', message: 'boom', retryable: true },
+      error: { code: 'SOURCE_ERROR', message: 'boom', retryable: false },
     });
     expect(result.results[1]).toMatchObject({
       success: false,
-      error: { code: 'SOURCE_ERROR', message: 'An unknown error occurred', retryable: true },
+      error: { code: 'SOURCE_ERROR', message: 'An unknown error occurred', retryable: false },
     });
   });
 });

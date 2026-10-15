@@ -46,6 +46,18 @@ describe('application error normalization', () => {
     });
   });
 
+  it.each([new Error('Unexpected failure'), new TypeError('Broken implementation')])(
+    'does not recommend retrying an unclassified exception: %s',
+    (error) => {
+      expect(normalizeError(error, 'tmdb')).toEqual({
+        code: 'SOURCE_ERROR',
+        message: error.message,
+        source: 'tmdb',
+        retryable: false,
+      });
+    }
+  );
+
   it('classifies validation and network timeout errors', () => {
     const parsed = z.string().safeParse(42);
     expect(parsed.success).toBe(false);
@@ -74,7 +86,7 @@ describe('application error normalization', () => {
       expect(error).toEqual({
         code: 'SOURCE_ERROR',
         message: 'An unknown error occurred',
-        retryable: true,
+        retryable: false,
       });
       expect(ErrorResponseSchema.safeParse({ error }).success).toBe(true);
     }
@@ -99,7 +111,7 @@ describe('application error normalization', () => {
         code: 'SOURCE_ERROR',
         message: 'An unknown error occurred',
         source: 'tmdb',
-        retryable: true,
+        retryable: false,
       });
     }
   });
@@ -139,7 +151,7 @@ describe('application error normalization', () => {
       code: 'SOURCE_ERROR',
       message: 'Network down',
       source: 'tmdb',
-      retryable: true,
+      retryable: false,
     });
     expect(normalizeError('Network down').message).toBe('Network down');
     expect(

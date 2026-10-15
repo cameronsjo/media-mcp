@@ -1,4 +1,6 @@
 import { HttpClient } from '../../src/utils/http-client.js';
+import { LookupMovieTool, LookupMovieInputSchema } from '../../src/tools/lookup-movie.js';
+import { LookupTVTool, LookupTVInputSchema } from '../../src/tools/lookup-tv.js';
 import { SourceError } from '../../src/utils/errors.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TMDBSource } from '../../src/sources/tmdb.js';
@@ -166,7 +168,7 @@ describe('TMDBSource', () => {
       expect(result?.identifiers.imdb).toBe('tt1375666');
     });
 
-    it('should return null for invalid ID', async () => {
+    it('reports a non-retryable not-found error for an invalid ID', async () => {
       // Details, credits, and providers are fetched concurrently.
       for (let i = 0; i < 3; i++)
         mockRequest.mockResolvedValueOnce({
@@ -177,9 +179,11 @@ describe('TMDBSource', () => {
           },
         } as any);
 
-      const result = await source.getMovieDetails(99999999);
-
-      expect(result).toBeNull();
+      await expect(source.getMovieDetails(99999999)).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        source: 'tmdb',
+        retryable: false,
+      });
     });
   });
 
@@ -309,6 +313,57 @@ describe('TMDBSource', () => {
         get.mockRestore();
       }
     });
+
+    it.each(['movie', 'tv'] as const)(
+      'returns non-retryable NOT_FOUND from the %s tool for an explicit ID with HTTP 404',
+      async (kind) => {
+        const get = vi
+          .spyOn(HttpClient.prototype, 'get')
+          .mockResolvedValue({ status: 404, headers: {}, data: {} });
+        try {
+          const execution =
+            kind === 'movie'
+              ? new LookupMovieTool(source, logger).execute(
+                  LookupMovieInputSchema.parse({ title: 'Missing', tmdb_id: 99999999 })
+                )
+              : new LookupTVTool(source, logger).execute(
+                  LookupTVInputSchema.parse({ title: 'Missing', tmdb_id: 99999999 })
+                );
+          await expect(execution).rejects.toMatchObject({
+            code: 'NOT_FOUND',
+            source: 'tmdb',
+            retryable: false,
+          });
+          expect(get).not.toHaveBeenCalledWith(
+            expect.stringMatching(/^\/search\//),
+            expect.anything()
+          );
+        } finally {
+          get.mockRestore();
+        }
+      }
+    );
+
+    it.each(['credits', 'watch/providers'])(
+      'prioritizes a primary movie 404 over a concurrent %s timeout',
+      async (endpoint) => {
+        const get = vi.spyOn(HttpClient.prototype, 'get').mockImplementation(async (path) => {
+          if (path.endsWith(`/${endpoint}`)) {
+            throw new SourceError('Enrichment timed out', 'TIMEOUT', 'tmdb', true);
+          }
+          return { status: 404, headers: {}, data: {} };
+        });
+        try {
+          await expect(
+            new LookupMovieTool(source, logger).execute(
+              LookupMovieInputSchema.parse({ title: 'Missing', tmdb_id: 99999999 })
+            )
+          ).rejects.toMatchObject({ code: 'NOT_FOUND', source: 'tmdb', retryable: false });
+        } finally {
+          get.mockRestore();
+        }
+      }
+    );
 
     it('keeps a real 404 as a no-result fallback', async () => {
       const get = vi

@@ -160,7 +160,7 @@ export class TMDBSource {
 
     try {
       // Fetch movie details, credits, and watch providers in parallel
-      const [detailsRes, creditsRes, providersRes] = await Promise.all([
+      const [detailsResponse, creditsResponse, providersResponse] = await Promise.allSettled([
         this.client.get<TMDBMovieDetails>(`/movie/${tmdbId}`, {
           params: { append_to_response: 'external_ids' },
         }),
@@ -168,11 +168,17 @@ export class TMDBSource {
         this.client.get<TMDBWatchProviders>(`/movie/${tmdbId}/watch/providers`),
       ]);
 
+      // A primary not-found/status response takes precedence over optional
+      // enrichment failures, even when those requests reject concurrently.
+      if (detailsResponse.status === 'rejected') throw detailsResponse.reason;
+      const detailsRes = detailsResponse.value;
       if (detailsRes.status !== 200) {
-        if (detailsRes.status !== 404)
-          throw errorFromHttpStatus(SOURCE, detailsRes.status, detailsRes.headers['retry-after']);
-        return null;
+        throw errorFromHttpStatus(SOURCE, detailsRes.status, detailsRes.headers['retry-after']);
       }
+      if (creditsResponse.status === 'rejected') throw creditsResponse.reason;
+      if (providersResponse.status === 'rejected') throw providersResponse.reason;
+      const creditsRes = creditsResponse.value;
+      const providersRes = providersResponse.value;
 
       const details = TMDBMovieDetailsSchema.parse(detailsRes.data);
       let parsedCredits: TMDBMovieCredits | null = null;
@@ -367,9 +373,7 @@ export class TMDBSource {
       });
 
       if (response.status !== 200) {
-        if (response.status !== 404)
-          throw errorFromHttpStatus(SOURCE, response.status, response.headers['retry-after']);
-        return null;
+        throw errorFromHttpStatus(SOURCE, response.status, response.headers['retry-after']);
       }
 
       const details = TMDBTVDetailsSchema.parse(response.data);
