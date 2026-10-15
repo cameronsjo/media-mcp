@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Documented manual Semantic Versioning and changelog updates, with npm version-bump scripts that do not create commits or tags.
+
 - Docker Compose for local and homelab deployment
 - Makefile with dev/build/test/docker targets
 - OCI labels on container image
@@ -26,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Replaced the custom frontmatter YAML serializer with the maintained `yaml` library, including round-trip coverage for escaped, multiline, nested, and ambiguous values.
 - Consolidated CI workflows (merged test.yml into ci.yml)
 - HTTP `logging/setLevel` now announces `log_level_changed`, matching stdio; omitted `tools/call` arguments now reach `executeToolCall` as `undefined` instead of `{}`.
 - Added periodic cleanup for expired cache entries
