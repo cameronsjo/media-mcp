@@ -167,10 +167,10 @@ export function extractSeriesFromTitle(title: string): {
     /^(.+?)\s*#(\d+(?:\.\d+)?)$/,
     // "Title, Book 1"
     /^(.+?),\s*Book\s+(\d+(?:\.\d+)?)$/i,
-    // "Title - Series Book 1" when the series is explicitly marked as a series.
+    // "Title - Named Series Book 1" when the series name ends in Series.
     // A bare dash is ambiguous with a subtitle (for example, The Hobbit - Or
-    // There and Back Again Book 1), so leave those titles untouched.
-    /^(.+?)\s+-\s+((?:(?:.+?\b)?Series\b).*?)\s+Book\s+(\d+(?:\.\d+)?)$/i,
+    // There and Back Again Book 1), and "A Series of ..." is subtitle-shaped.
+    /^(.+?)\s+-\s+((?:(?:.+?\b)?Series))\s+Book\s+(\d+(?:\.\d+)?)$/i,
   ];
 
   for (const pattern of patterns) {
@@ -203,8 +203,15 @@ export function extractSeriesFromTitle(title: string): {
   const partMatch = title.match(partOfSeriesPattern);
   if (partMatch) {
     const seriesName = partMatch[3].trim();
-    // "Title, Part 1 of 2" is a format/volume count, not a series name.
-    if (!/^\d+(?:\.\d+)?$/.test(seriesName)) {
+    // Numeric, number-word, and "N Parts" suffixes are format counts, not
+    // series names. Allow compound English number words while requiring the
+    // complete suffix to be a count, so names such as "One Hundred Series"
+    // remain valid series names.
+    const numericPartCountPattern = /^\d+(?:\.\d+)?(?:\s+parts?)?$/i;
+    const numberWordPattern =
+      /^(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|and)(?:[\s-]+(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|and))*$/i;
+    const numberWordCount = seriesName.replace(/\s+parts?$/i, '').trim();
+    if (!numericPartCountPattern.test(seriesName) && !numberWordPattern.test(numberWordCount)) {
       return {
         cleanTitle: partMatch[1].trim(),
         seriesName,

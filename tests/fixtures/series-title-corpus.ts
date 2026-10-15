@@ -4,7 +4,7 @@ export interface SeriesTitleExpectation {
   seriesPosition: number | null;
 }
 
-export interface RealSeriesTitleFixture {
+export interface SeriesTitleFixture {
   id: string;
   title: string;
   expected: SeriesTitleExpectation;
@@ -17,7 +17,7 @@ export interface RealSeriesTitleFixture {
  * retained beside each title so a changed fixture can be checked against the
  * catalog record instead of being treated as an invented parser example.
  */
-export const realSeriesTitleCorpus: readonly RealSeriesTitleFixture[] = [
+export const realSeriesTitleCorpus: readonly SeriesTitleFixture[] = [
   {
     id: 'hobbit-subtitle-or',
     title: 'The Hobbit or There and Back Again',
@@ -26,30 +26,30 @@ export const realSeriesTitleCorpus: readonly RealSeriesTitleFixture[] = [
       seriesName: null,
       seriesPosition: null,
     },
-    sourceUrl: 'https://openlibrary.org/books/OL24209616M/The_Hobbit_or_There_and_Back_Again',
-    sourceNote: 'Open Library records the full subtitle as the title of the edition.',
+    sourceUrl: 'https://openlibrary.org/books/OL24209616M.json',
+    sourceNote: 'Open Library title field is exactly "The Hobbit or There and Back Again".',
   },
   {
-    id: 'hobbit-subtitle-colon',
-    title: 'The Hobbit: or There and Back Again',
+    id: 'hobbit-edition-title',
+    title: 'The Hobbit',
     expected: {
-      cleanTitle: 'The Hobbit: or There and Back Again',
+      cleanTitle: 'The Hobbit',
       seriesName: null,
       seriesPosition: null,
     },
-    sourceUrl: 'https://openlibrary.org/books/OL10236414M/The_Hobbit',
-    sourceNote: 'Open Library lists this colon subtitle in the edition title variants.',
+    sourceUrl: 'https://openlibrary.org/books/OL10236414M.json',
+    sourceNote: 'Open Library title field is exactly "The Hobbit" for this edition record.',
   },
   {
-    id: 'autobiography-henry-viii-audio-part',
-    title: 'The Autobiography Of Henry VIII: Part 1 of 2',
+    id: 'autobiography-henry-viii',
+    title: 'The Autobiography Of Henry VIII',
     expected: {
-      cleanTitle: 'The Autobiography Of Henry VIII: Part 1 of 2',
+      cleanTitle: 'The Autobiography Of Henry VIII',
       seriesName: null,
       seriesPosition: null,
     },
-    sourceUrl: 'https://openlibrary.org/books/OL9737168M/The_Autobiography_Of_Henry_VIII',
-    sourceNote: 'Open Library records the audiobook as Part 1 of 2.',
+    sourceUrl: 'https://openlibrary.org/books/OL9737168M.json',
+    sourceNote: 'Open Library title field is exactly "The Autobiography Of Henry VIII".',
   },
   {
     id: 'renaissance-audio-part',
@@ -59,52 +59,52 @@ export const realSeriesTitleCorpus: readonly RealSeriesTitleFixture[] = [
       seriesName: null,
       seriesPosition: null,
     },
-    sourceUrl: 'https://openlibrary.org/books/OL12581465M/The_Renaissance_Part_1_of_2',
-    sourceNote: 'Open Library records the Books On Tape edition as Part 1 of 2.',
+    sourceUrl: 'https://openlibrary.org/books/OL12581465M.json',
+    sourceNote: 'Open Library title field is exactly "The Renaissance Part 1 of 2".',
   },
   {
-    id: 'george-orwell-biography-audio-part',
-    title: 'George Orwell: A Life Part 1 of 2',
+    id: 'george-orwell-biography',
+    title: 'George Orwell, a life',
     expected: {
-      cleanTitle: 'George Orwell: A Life Part 1 of 2',
+      cleanTitle: 'George Orwell, a life',
       seriesName: null,
       seriesPosition: null,
     },
-    sourceUrl: 'https://openlibrary.org/books/OL4126721M/George_Orwell_a_life',
-    sourceNote: 'Open Library lists the Books On Tape edition as Part 1 of 2.',
+    sourceUrl: 'https://openlibrary.org/books/OL4126721M.json',
+    sourceNote: 'Open Library title field is exactly "George Orwell, a life".',
   },
   {
-    id: 'spandau-audio-part',
-    title: 'Spandau: The Secret Diaries Part 1 of 2',
+    id: 'spandau',
+    title: 'Spandau',
     expected: {
-      cleanTitle: 'Spandau: The Secret Diaries Part 1 of 2',
+      cleanTitle: 'Spandau',
       seriesName: null,
       seriesPosition: null,
     },
-    sourceUrl: 'https://openlibrary.org/books/OL20940534M/Spandau',
-    sourceNote: 'Open Library lists the Books On Tape edition as Part 1 of 2.',
+    sourceUrl: 'https://openlibrary.org/books/OL20940534M.json',
+    sourceNote: 'Open Library title field is exactly "Spandau".',
   },
   {
-    id: 'patton-audio-part',
-    title: 'Patton: Ordeal and Triumph Part 1 of 2',
+    id: 'patton',
+    title: 'Patton',
     expected: {
-      cleanTitle: 'Patton: Ordeal and Triumph Part 1 of 2',
+      cleanTitle: 'Patton',
       seriesName: null,
       seriesPosition: null,
     },
-    sourceUrl: 'https://openlibrary.org/books/OL17922345M/Patton',
-    sourceNote: 'Open Library lists the Books On Tape edition as Part 1 of 2.',
+    sourceUrl: 'https://openlibrary.org/books/OL17922345M.json',
+    sourceNote: 'Open Library title field is exactly "Patton".',
   },
   {
-    id: 'curse-series-part',
-    title: 'Curse: Part 1 of the Battle of Fansareah Series',
+    id: 'curse',
+    title: 'Curse',
     expected: {
       cleanTitle: 'Curse',
-      seriesName: 'the Battle of Fansareah Series',
-      seriesPosition: 1,
+      seriesName: null,
+      seriesPosition: null,
     },
-    sourceUrl: 'https://openlibrary.org/books/OL37528863M/Curse',
-    sourceNote: 'Open Library records the title with an explicit series name and part number.',
+    sourceUrl: 'https://openlibrary.org/books/OL37528863M.json',
+    sourceNote: 'Open Library title field is exactly "Curse".',
   },
   {
     id: 'well-beloved-hyphenated-title',
@@ -114,8 +114,78 @@ export const realSeriesTitleCorpus: readonly RealSeriesTitleFixture[] = [
       seriesName: null,
       seriesPosition: null,
     },
-    sourceUrl: 'https://openlibrary.org/books/OL2719292M/The_well-beloved',
-    sourceNote: 'Open Library records the hyphenated title as a standalone novel.',
+    sourceUrl: 'https://openlibrary.org/books/OL2719292M.json',
+    sourceNote: 'Open Library title field is exactly "The well-beloved".',
+  },
+  {
+    id: 'casimir-bridge-dash-series',
+    title: 'Casimir Bridge - Anghazi Series Book 1',
+    expected: {
+      cleanTitle: 'Casimir Bridge',
+      seriesName: 'Anghazi Series',
+      seriesPosition: 1,
+    },
+    sourceUrl: 'https://openlibrary.org/books/OL40047894M.json',
+    sourceNote: 'Open Library title field is exactly "Casimir Bridge - Anghazi Series Book 1".',
+  },
+  {
+    id: 'angels-punishment-dash-series',
+    title: "Angel's Punishment - Punishment Series Book 1",
+    expected: {
+      cleanTitle: "Angel's Punishment",
+      seriesName: 'Punishment Series',
+      seriesPosition: 1,
+    },
+    sourceUrl: 'https://openlibrary.org/books/OL56168630M.json',
+    sourceNote:
+      'Open Library title field is exactly "Angel\'s Punishment - Punishment Series Book 1".',
+  },
+  {
+    id: 'blue-flame-dash-nonseries',
+    title: 'Blue Flame - Men of Fire Book 2',
+    expected: {
+      cleanTitle: 'Blue Flame - Men of Fire Book 2',
+      seriesName: null,
+      seriesPosition: null,
+    },
+    sourceUrl: 'https://openlibrary.org/books/OL24500846M.json',
+    sourceNote: 'Open Library title field is exactly "Blue Flame - Men of Fire Book 2".',
+  },
+  {
+    id: 'ana-dash-nonseries',
+    title: 'Ana - The quiet Death of a Rebel',
+    expected: {
+      cleanTitle: 'Ana - The quiet Death of a Rebel',
+      seriesName: null,
+      seriesPosition: null,
+    },
+    sourceUrl: 'https://openlibrary.org/books/OL37840351M.json',
+    sourceNote: 'Open Library title field is exactly "Ana - The quiet Death of a Rebel".',
+  },
+  {
+    id: 'jacq-of-spades-part-series',
+    title: 'The Jacq of Spades: Part 1 of the Red Dog Conspiracy',
+    expected: {
+      cleanTitle: 'The Jacq of Spades',
+      seriesName: 'the Red Dog Conspiracy',
+      seriesPosition: 1,
+    },
+    sourceUrl: 'https://openlibrary.org/books/OL26830627M.json',
+    sourceNote:
+      'Open Library title field is exactly "The Jacq of Spades: Part 1 of the Red Dog Conspiracy".',
+  },
+  {
+    id: 'covenant-part-series',
+    title:
+      'The Covenant of Abraham, Isaac, and Jacob, Part 1 of the Covenants in the Biblical Evolution Revolution Series',
+    expected: {
+      cleanTitle: 'The Covenant of Abraham, Isaac, and Jacob',
+      seriesName: 'the Covenants in the Biblical Evolution Revolution Series',
+      seriesPosition: 1,
+    },
+    sourceUrl: 'https://openlibrary.org/books/OL32531681M.json',
+    sourceNote:
+      'Open Library title field is exactly "The Covenant of Abraham, Isaac, and Jacob, Part 1 of the Covenants in the Biblical Evolution Revolution Series".',
   },
 ];
 
@@ -124,7 +194,7 @@ export const realSeriesTitleCorpus: readonly RealSeriesTitleFixture[] = [
  * parser syntax and the prior regressions without claiming that the exact
  * assembled string is a catalog title.
  */
-export const syntheticSeriesTitleFixtures: readonly RealSeriesTitleFixture[] = [
+export const syntheticSeriesTitleFixtures: readonly SeriesTitleFixture[] = [
   {
     id: 'prior-hobbit-dash-regression',
     title: 'The Hobbit - Or There and Back Again Book 1',
@@ -133,7 +203,7 @@ export const syntheticSeriesTitleFixtures: readonly RealSeriesTitleFixture[] = [
       seriesName: null,
       seriesPosition: null,
     },
-    sourceUrl: 'https://openlibrary.org/books/OL24209616M/The_Hobbit_or_There_and_Back_Again',
+    sourceUrl: 'synthetic://series-title-parser',
     sourceNote:
       'Synthetic regression string based on the attributed Hobbit title; exact string is not a catalog title.',
   },
@@ -150,10 +220,10 @@ export const syntheticSeriesTitleFixtures: readonly RealSeriesTitleFixture[] = [
   },
   {
     id: 'explicit-dash-named-series-syntax',
-    title: 'Book Name - The Series Name Book 1',
+    title: 'Book Name - The Series Book 1',
     expected: {
       cleanTitle: 'Book Name',
-      seriesName: 'The Series Name',
+      seriesName: 'The Series',
       seriesPosition: 1,
     },
     sourceUrl: 'synthetic://series-title-parser',
@@ -169,6 +239,18 @@ export const syntheticSeriesTitleFixtures: readonly RealSeriesTitleFixture[] = [
     },
     sourceUrl: 'synthetic://series-title-parser',
     sourceNote: 'Synthetic syntax contract; not a real title.',
+  },
+  {
+    id: 'series-of-subtitle-dash-regression',
+    title: 'Letters - A Series of Letters Book 2',
+    expected: {
+      cleanTitle: 'Letters - A Series of Letters Book 2',
+      seriesName: null,
+      seriesPosition: null,
+    },
+    sourceUrl: 'synthetic://series-title-parser',
+    sourceNote:
+      'Synthetic real-shaped dash subtitle; the Series keyword is not sufficient when followed by "of".',
   },
   {
     id: 'standalone-part-series-regression',
@@ -192,6 +274,51 @@ export const syntheticSeriesTitleFixtures: readonly RealSeriesTitleFixture[] = [
     sourceUrl: 'synthetic://series-title-parser',
     sourceNote:
       'Synthetic numeric-only regression; the final number is a format count, not a series name.',
+  },
+  {
+    id: 'numeric-parts-suffix-regression',
+    title: 'Book Name, Part 1 of 2 Parts',
+    expected: {
+      cleanTitle: 'Book Name, Part 1 of 2 Parts',
+      seriesName: null,
+      seriesPosition: null,
+    },
+    sourceUrl: 'synthetic://series-title-parser',
+    sourceNote: 'Synthetic format-count regression; an N Parts suffix is not a series name.',
+  },
+  {
+    id: 'number-word-part-suffix-regression',
+    title: 'Book Name, Part 1 of Two',
+    expected: {
+      cleanTitle: 'Book Name, Part 1 of Two',
+      seriesName: null,
+      seriesPosition: null,
+    },
+    sourceUrl: 'synthetic://series-title-parser',
+    sourceNote: 'Synthetic format-count regression; a number word is not a series name.',
+  },
+  {
+    id: 'compound-number-word-part-suffix-regression',
+    title: 'Book Name, Part 1 of Twenty-One',
+    expected: {
+      cleanTitle: 'Book Name, Part 1 of Twenty-One',
+      seriesName: null,
+      seriesPosition: null,
+    },
+    sourceUrl: 'synthetic://series-title-parser',
+    sourceNote: 'Synthetic format-count regression; a compound number word is not a series name.',
+  },
+  {
+    id: 'number-word-parts-suffix-regression',
+    title: 'Book Name, Part 1 of One Hundred and Two Parts',
+    expected: {
+      cleanTitle: 'Book Name, Part 1 of One Hundred and Two Parts',
+      seriesName: null,
+      seriesPosition: null,
+    },
+    sourceUrl: 'synthetic://series-title-parser',
+    sourceNote:
+      'Synthetic format-count regression; a compound number word with Parts is not a series name.',
   },
   {
     id: 'parenthetical-format-precedence-regression',
