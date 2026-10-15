@@ -121,9 +121,9 @@ export const realSeriesTitleCorpus: readonly SeriesTitleFixture[] = [
     id: 'casimir-bridge-dash-series',
     title: 'Casimir Bridge - Anghazi Series Book 1',
     expected: {
-      cleanTitle: 'Casimir Bridge',
-      seriesName: 'Anghazi Series',
-      seriesPosition: 1,
+      cleanTitle: 'Casimir Bridge - Anghazi Series Book 1',
+      seriesName: null,
+      seriesPosition: null,
     },
     sourceUrl: 'https://openlibrary.org/books/OL40047894M.json',
     sourceNote: 'Open Library title field is exactly "Casimir Bridge - Anghazi Series Book 1".',
@@ -132,9 +132,9 @@ export const realSeriesTitleCorpus: readonly SeriesTitleFixture[] = [
     id: 'angels-punishment-dash-series',
     title: "Angel's Punishment - Punishment Series Book 1",
     expected: {
-      cleanTitle: "Angel's Punishment",
-      seriesName: 'Punishment Series',
-      seriesPosition: 1,
+      cleanTitle: "Angel's Punishment - Punishment Series Book 1",
+      seriesName: null,
+      seriesPosition: null,
     },
     sourceUrl: 'https://openlibrary.org/books/OL56168630M.json',
     sourceNote:
@@ -166,9 +166,9 @@ export const realSeriesTitleCorpus: readonly SeriesTitleFixture[] = [
     id: 'jacq-of-spades-part-series',
     title: 'The Jacq of Spades: Part 1 of the Red Dog Conspiracy',
     expected: {
-      cleanTitle: 'The Jacq of Spades',
-      seriesName: 'the Red Dog Conspiracy',
-      seriesPosition: 1,
+      cleanTitle: 'The Jacq of Spades: Part 1 of the Red Dog Conspiracy',
+      seriesName: null,
+      seriesPosition: null,
     },
     sourceUrl: 'https://openlibrary.org/books/OL26830627M.json',
     sourceNote:
@@ -179,9 +179,10 @@ export const realSeriesTitleCorpus: readonly SeriesTitleFixture[] = [
     title:
       'The Covenant of Abraham, Isaac, and Jacob, Part 1 of the Covenants in the Biblical Evolution Revolution Series',
     expected: {
-      cleanTitle: 'The Covenant of Abraham, Isaac, and Jacob',
-      seriesName: 'the Covenants in the Biblical Evolution Revolution Series',
-      seriesPosition: 1,
+      cleanTitle:
+        'The Covenant of Abraham, Isaac, and Jacob, Part 1 of the Covenants in the Biblical Evolution Revolution Series',
+      seriesName: null,
+      seriesPosition: null,
     },
     sourceUrl: 'https://openlibrary.org/books/OL32531681M.json',
     sourceNote:
@@ -211,34 +212,34 @@ export const syntheticSeriesTitleFixtures: readonly SeriesTitleFixture[] = [
     id: 'explicit-dash-series-syntax',
     title: 'Book Name - Series Book 1',
     expected: {
-      cleanTitle: 'Book Name',
-      seriesName: 'Series',
-      seriesPosition: 1,
+      cleanTitle: 'Book Name - Series Book 1',
+      seriesName: null,
+      seriesPosition: null,
     },
     sourceUrl: 'synthetic://series-title-parser',
-    sourceNote: 'Synthetic syntax contract; not a real title.',
+    sourceNote: 'Synthetic format candidate; heuristic parsing was removed as ambiguous.',
   },
   {
     id: 'explicit-dash-named-series-syntax',
     title: 'Book Name - The Series Book 1',
     expected: {
-      cleanTitle: 'Book Name',
-      seriesName: 'The Series',
-      seriesPosition: 1,
+      cleanTitle: 'Book Name - The Series Book 1',
+      seriesName: null,
+      seriesPosition: null,
     },
     sourceUrl: 'synthetic://series-title-parser',
-    sourceNote: 'Synthetic syntax contract; not a real title.',
+    sourceNote: 'Synthetic format candidate; heuristic parsing was removed as ambiguous.',
   },
   {
     id: 'explicit-comma-part-series-syntax',
     title: 'Book Name, Part 1 of Series',
     expected: {
-      cleanTitle: 'Book Name',
-      seriesName: 'Series',
-      seriesPosition: 1,
+      cleanTitle: 'Book Name, Part 1 of Series',
+      seriesName: null,
+      seriesPosition: null,
     },
     sourceUrl: 'synthetic://series-title-parser',
-    sourceNote: 'Synthetic syntax contract; not a real title.',
+    sourceNote: 'Synthetic format candidate; heuristic parsing was removed as ambiguous.',
   },
   {
     id: 'series-of-subtitle-dash-regression',
@@ -332,4 +333,50 @@ export const syntheticSeriesTitleFixtures: readonly SeriesTitleFixture[] = [
     sourceNote:
       'Synthetic overlap regression; the established parenthetical series format takes precedence.',
   },
+];
+
+/**
+ * Every adversarial string from the two review passes remains a title. These
+ * are synthetic parser cases, not claims about catalog records.
+ */
+export const reviewRegressionTitles: readonly string[] = [
+  'Letters - A Series of Letters Book 2',
+  'A Tale - A Series of Unfortunate Events Book 1',
+  'Foo - Series Book 1 Book 2',
+  'Foo: Part 1 of 2 - Series Book 3',
+  'Foo, Part 1 of 2 Parts',
+  'Foo, Part 1 of Two',
+  'Foo, Part 1 of Series (Unabridged)',
+  'Letters - A Series of Unfortunate Events Book 2',
+  'Book Name, Part 1 of 3 Volumes',
+  'Book Name, Part 1 of 2 CDs',
+  'Book Name, Part 1 of 2 Discs',
+  'Book Name, Part 1 of 4 Cassettes',
+  'Book Name, Part 1 of 2 Audiobooks',
+  'Book Name, Part 1 of 2 Books',
+  'Book Name, Part 1 of Three Volumes',
+  'Book Name, Part 1 of II',
+  'Book Name, Part 1 of 2 (Unabridged)',
+  'Book Name: Part 1 of 2, Unabridged',
+  'Book Name, Part 1 of 2 Parts.',
+  'Foo - A Novel in a Series Book 2',
+  'Statistics - Time Series Book 2',
+  'Foo - Series Book 1',
+  'Foo - Seriesly Book 1',
+  'Foo -Series Book 1',
+  'Foo - Series Overview Book 1',
+  'Book Name, Part 1 of Twenty-One',
+  'Book Name, Part 1 of Two Parts',
+  'Book Name, Part 1 of One Hundred and Two Parts',
+  'Book Name, Part 1 of two',
+  'Book Name, Part 1 of 2 parts',
+  'Part 1 of And',
+  // These formerly misattributed strings are retained only as synthetic
+  // parser regressions.
+  'Curse: Part 1 of the Battle of Fansareah Series',
+  'The Autobiography Of Henry VIII: Part 1 of 2',
+  'Spandau: The Secret Diaries Part 1 of 2',
+  'Patton: Ordeal and Triumph Part 1 of 2',
+  'George Orwell: A Life Part 1 of 2',
+  'The Hobbit: or There and Back Again',
 ];

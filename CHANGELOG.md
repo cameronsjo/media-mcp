@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Added an attributed exact-record-title corpus for series parsing, rejecting numeric-only and format-count `Part N of M` labels and ambiguous dash or standalone `Part N of Series` strings while supporting verified `Series Book N` and delimited `Part N of Series` forms.
+- Added an attributed exact-record-title corpus and regression matrix for series parsing. The new dash and `Part N of ...` heuristics were removed after review showed they could damage subtitles and format labels; #48 remains open for a structured metadata approach.
 - Structured series metadata from a book source now takes precedence over title parsing from another source.
 - Preserve non-retryable TMDB not-found errors for explicit movie/TV IDs and default unclassified exceptions to non-retryable.
 

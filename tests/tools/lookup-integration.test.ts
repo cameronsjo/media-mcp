@@ -352,7 +352,7 @@ describe('LookupBookTool integration paths', () => {
       searchByTitleAuthor: vi.fn().mockResolvedValue(
         partialBook({
           source: 'open_library',
-          title: 'Book Name - Series Book 1',
+          title: 'Book Name (Parsed Series #1)',
         })
       ),
     });

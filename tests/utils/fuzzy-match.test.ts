@@ -11,6 +11,7 @@ import {
 } from '../../src/utils/fuzzy-match.js';
 import {
   realSeriesTitleCorpus,
+  reviewRegressionTitles,
   syntheticSeriesTitleFixtures,
 } from '../fixtures/series-title-corpus.js';
 
@@ -142,6 +143,14 @@ describe('extractSeriesFromTitle', () => {
 
   it.each(syntheticSeriesTitleFixtures)('matches synthetic regression fixture $id', (fixture) => {
     expect(extractSeriesFromTitle(fixture.title)).toEqual(fixture.expected);
+  });
+
+  it.each(reviewRegressionTitles)('leaves review regression title unchanged: %s', (title) => {
+    expect(extractSeriesFromTitle(title)).toEqual({
+      cleanTitle: title,
+      seriesName: null,
+      seriesPosition: null,
+    });
   });
 
   it('extracts a series name and integer position from a hash pattern', () => {
