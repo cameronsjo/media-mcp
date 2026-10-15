@@ -64,3 +64,27 @@ docs: update README with new env vars
 - Target `main` branch
 - Ensure CI passes (lint, typecheck, tests)
 - Use closing keywords: `Closes #123` or `Fixes #123`
+
+## Versioning and changelog
+
+`package.json` is the source of the package and MCP server version. Keep the root versions in `package.json` and `package-lock.json` synchronized with npm's version command. The current `1.0.0` stays unchanged until a release is explicitly authorized.
+
+Use Semantic Versioning:
+
+- Patch: a backwards-compatible bug fix.
+- Minor: backwards-compatible functionality.
+- Major: a breaking change to tools, responses, transport behavior, or configuration requirements.
+
+Record consumer-visible changes under `CHANGELOG.md` → `Unreleased` in the implementation PR, using Added, Changed, Fixed, or Removed. Conventional Commit subjects describe individual changes; they do not automatically choose a release version. Before a release, review the complete Unreleased section: any breaking change requires a major version, including the current stateless HTTP/LAN configuration migration.
+
+When Cameron authorizes preparation of a release, work on a feature branch and run exactly one appropriate command:
+
+```bash
+npm run version:patch
+npm run version:minor
+npm run version:major
+```
+
+Each command updates both package manifests, prints the new version, and creates no commit or Git tag. Choose one command; running all three would perform three separate bumps. Move the Unreleased entries into a dated section named for the chosen version, leave a new Unreleased heading, and run `npm run build`, `npm run lint`, `npm run typecheck`, and `npm test`. Commit both manifests and the changelog together and open a PR.
+
+These commands do not publish a package, create a GitHub release, push a tag, or deploy the server. Those delivery actions require separate authorization. Release automation is optional future work, not part of this manual workflow.
