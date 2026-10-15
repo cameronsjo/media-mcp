@@ -292,6 +292,51 @@ describe('GenerateFrontmatterTool', () => {
       expect(parsed.nested_values).toEqual(edgeCaseBook.series);
     });
 
+    it('round-trips arrays of objects and omits empty nested values and invalid paths', async () => {
+      const result = await tool.execute({
+        lookup_result: {
+          ...mockBookResult,
+          payload: {
+            objects: [
+              { name: 'kept', absent: undefined },
+              { absent: null },
+              null,
+              ['nested', 'true'],
+            ],
+            empty_record: { absent: null },
+            empty_list: [],
+          },
+          series: { name: null, position: null, total_books: null },
+        },
+        template: 'minimal',
+        custom_fields: {
+          objects: 'payload.objects',
+          empty_record: 'payload.empty_record',
+          empty_list: 'payload.empty_list',
+          scalar_path: 'title.child',
+          null_path: 'series.name.child',
+        },
+      });
+      const parsed = parse(result.slice(4, -3)) as Record<string, unknown>;
+      expect(parsed.objects).toEqual([{ name: 'kept' }, null, ['nested', 'true']]);
+      for (const key of ['empty_record', 'empty_list', 'scalar_path', 'null_path']) {
+        expect(parsed).not.toHaveProperty(key);
+      }
+    });
+
+    it('round-trips the full TV template including creators and nested identifiers', async () => {
+      const result = await tool.execute({
+        lookup_result: { ...mockTVResult, original_title: 'Original title' },
+        template: 'full',
+      });
+      const parsed = parse(result.slice(4, -3)) as Record<string, unknown>;
+      expect(parsed.title).toBe(mockTVResult.title);
+      expect(parsed.original_title).toBe('Original title');
+      expect(parsed.first_air_date).toBe(mockTVResult.first_air_date);
+      expect(parsed.identifiers).toMatchObject({ tmdb: mockTVResult.identifiers.tmdb });
+      expect(parsed.created_by).toEqual(mockTVResult.created_by);
+    });
+
     it('preserves own __proto__ keys in nested and top-level custom metadata', async () => {
       const payload = JSON.parse('{"__proto__":{"keep":"yes"},"normal":"ok"}') as unknown;
       const result = await tool.execute({
