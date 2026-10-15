@@ -1,3 +1,7 @@
+import { HttpClient } from '../../src/utils/http-client.js';
+import { LookupMovieTool, LookupMovieInputSchema } from '../../src/tools/lookup-movie.js';
+import { LookupTVTool, LookupTVInputSchema } from '../../src/tools/lookup-tv.js';
+import { SourceError } from '../../src/utils/errors.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TMDBSource } from '../../src/sources/tmdb.js';
 import { SQLiteCache } from '../../src/cache/sqlite-cache.js';
@@ -22,10 +26,7 @@ describe('TMDBSource', () => {
   beforeEach(() => {
     logger = new Logger('test');
     rateLimiter = new RateLimiter(logger);
-    cache = new SQLiteCache(
-      { path: ':memory:', defaultTTLHours: 24, enabled: true },
-      logger
-    );
+    cache = new SQLiteCache({ path: ':memory:', defaultTTLHours: 24, enabled: true }, logger);
     source = new TMDBSource('test-api-key', cache, logger, rateLimiter);
     vi.clearAllMocks();
   });
@@ -94,7 +95,10 @@ describe('TMDBSource', () => {
         original_title: 'Inception',
         release_date: '2010-07-16',
         runtime: 148,
-        genres: [{ id: 28, name: 'Action' }, { id: 878, name: 'Science Fiction' }],
+        genres: [
+          { id: 28, name: 'Action' },
+          { id: 878, name: 'Science Fiction' },
+        ],
         overview: 'A thief who steals corporate secrets...',
         tagline: 'Your mind is the scene of the crime.',
         poster_path: '/9gk7adHYeDvHkCSEqAvQNLV5Ber.jpg',
@@ -111,9 +115,7 @@ describe('TMDBSource', () => {
           { id: 6193, name: 'Leonardo DiCaprio', character: 'Cobb', order: 0 },
           { id: 24045, name: 'Joseph Gordon-Levitt', character: 'Arthur', order: 1 },
         ],
-        crew: [
-          { id: 525, name: 'Christopher Nolan', job: 'Director', department: 'Directing' },
-        ],
+        crew: [{ id: 525, name: 'Christopher Nolan', job: 'Director', department: 'Directing' }],
       };
 
       const mockProviders = {
@@ -166,18 +168,22 @@ describe('TMDBSource', () => {
       expect(result?.identifiers.imdb).toBe('tt1375666');
     });
 
-    it('should return null for invalid ID', async () => {
-      mockRequest.mockResolvedValueOnce({
-        statusCode: 404,
-        headers: {},
-        body: {
-          text: vi.fn().mockResolvedValue('Not found'),
-        },
-      } as any);
+    it('reports a non-retryable not-found error for an invalid ID', async () => {
+      // Details, credits, and providers are fetched concurrently.
+      for (let i = 0; i < 3; i++)
+        mockRequest.mockResolvedValueOnce({
+          statusCode: 404,
+          headers: {},
+          body: {
+            text: vi.fn().mockResolvedValue('Not found'),
+          },
+        } as any);
 
-      const result = await source.getMovieDetails(99999999);
-
-      expect(result).toBeNull();
+      await expect(source.getMovieDetails(99999999)).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        source: 'tmdb',
+        retryable: false,
+      });
     });
   });
 
@@ -270,6 +276,107 @@ describe('TMDBSource', () => {
     });
   });
 
+  describe('typed provider failures', () => {
+    it.each(['searchMovie', 'searchTV', 'getMovieDetails', 'getTVDetails'] as const)(
+      'propagates a retryable timeout from %s',
+      async (method) => {
+        const timeout = new SourceError('Provider timed out', 'TIMEOUT', 'tmdb', true);
+        const get = vi.spyOn(HttpClient.prototype, 'get').mockRejectedValue(timeout);
+        try {
+          const operation =
+            method === 'searchMovie'
+              ? source.searchMovie('Movie')
+              : method === 'searchTV'
+                ? source.searchTV('Show')
+                : method === 'getMovieDetails'
+                  ? source.getMovieDetails(1)
+                  : source.getTVDetails(1);
+          await expect(operation).rejects.toBe(timeout);
+        } finally {
+          get.mockRestore();
+        }
+      }
+    );
+
+    it('retains a terminal rate-limit code and Retry-After delay', async () => {
+      const get = vi
+        .spyOn(HttpClient.prototype, 'get')
+        .mockResolvedValue({ status: 429, headers: { 'retry-after': '12' }, data: {} });
+      try {
+        await expect(source.searchMovie('Movie')).rejects.toMatchObject({
+          code: 'RATE_LIMITED',
+          source: 'tmdb',
+          retryable: true,
+          retry_after_seconds: 12,
+        });
+      } finally {
+        get.mockRestore();
+      }
+    });
+
+    it.each(['movie', 'tv'] as const)(
+      'returns non-retryable NOT_FOUND from the %s tool for an explicit ID with HTTP 404',
+      async (kind) => {
+        const get = vi
+          .spyOn(HttpClient.prototype, 'get')
+          .mockResolvedValue({ status: 404, headers: {}, data: {} });
+        try {
+          const execution =
+            kind === 'movie'
+              ? new LookupMovieTool(source, logger).execute(
+                  LookupMovieInputSchema.parse({ title: 'Missing', tmdb_id: 99999999 })
+                )
+              : new LookupTVTool(source, logger).execute(
+                  LookupTVInputSchema.parse({ title: 'Missing', tmdb_id: 99999999 })
+                );
+          await expect(execution).rejects.toMatchObject({
+            code: 'NOT_FOUND',
+            source: 'tmdb',
+            retryable: false,
+          });
+          expect(get).not.toHaveBeenCalledWith(
+            expect.stringMatching(/^\/search\//),
+            expect.anything()
+          );
+        } finally {
+          get.mockRestore();
+        }
+      }
+    );
+
+    it.each(['credits', 'watch/providers'])(
+      'prioritizes a primary movie 404 over a concurrent %s timeout',
+      async (endpoint) => {
+        const get = vi.spyOn(HttpClient.prototype, 'get').mockImplementation(async (path) => {
+          if (path.endsWith(`/${endpoint}`)) {
+            throw new SourceError('Enrichment timed out', 'TIMEOUT', 'tmdb', true);
+          }
+          return { status: 404, headers: {}, data: {} };
+        });
+        try {
+          await expect(
+            new LookupMovieTool(source, logger).execute(
+              LookupMovieInputSchema.parse({ title: 'Missing', tmdb_id: 99999999 })
+            )
+          ).rejects.toMatchObject({ code: 'NOT_FOUND', source: 'tmdb', retryable: false });
+        } finally {
+          get.mockRestore();
+        }
+      }
+    );
+
+    it('keeps a real 404 as a no-result fallback', async () => {
+      const get = vi
+        .spyOn(HttpClient.prototype, 'get')
+        .mockResolvedValue({ status: 404, headers: {}, data: {} });
+      try {
+        await expect(source.searchTV('Missing')).resolves.toBeNull();
+      } finally {
+        get.mockRestore();
+      }
+    });
+  });
+
   describe('authentication', () => {
     const V3_KEY = '0123456789abcdef0123456789abcdef';
 
@@ -335,15 +442,19 @@ describe('TMDBSource', () => {
         statusCode: 401,
         headers: {},
         body: {
-          text: vi.fn().mockResolvedValue(
-            JSON.stringify({ status_code: 7, status_message: 'Invalid API key' })
-          ),
+          text: vi
+            .fn()
+            .mockResolvedValue(
+              JSON.stringify({ status_code: 7, status_message: 'Invalid API key' })
+            ),
         },
       } as any);
 
-      const result = await source.searchMovie('The Matrix', 1999);
-
-      expect(result).toBeNull();
+      await expect(source.searchMovie('The Matrix', 1999)).rejects.toMatchObject({
+        code: 'AUTH_ERROR',
+        source: 'tmdb',
+        retryable: false,
+      });
       const warnings = emitter.mock.calls
         .map((c) => c[0])
         .filter((e) => e.level === 'warning' && e.data.action === 'search_movie_failed');
@@ -365,9 +476,11 @@ describe('TMDBSource', () => {
         },
       } as any);
 
-      const result = await source.searchTV('Breaking Bad');
-
-      expect(result).toBeNull();
+      await expect(source.searchTV('Breaking Bad')).rejects.toMatchObject({
+        code: 'AUTH_ERROR',
+        source: 'tmdb',
+        retryable: false,
+      });
       const warnings = emitter.mock.calls
         .map((c) => c[0])
         .filter((e) => e.level === 'warning' && e.data.action === 'search_tv_failed');
@@ -385,18 +498,18 @@ describe('TMDBSource', () => {
         statusCode: 200,
         headers: {},
         body: {
-          text: vi.fn().mockResolvedValue(
-            JSON.stringify({ page: 1, total_results: 0, total_pages: 0, results: [] })
-          ),
+          text: vi
+            .fn()
+            .mockResolvedValue(
+              JSON.stringify({ page: 1, total_results: 0, total_pages: 0, results: [] })
+            ),
         },
       } as any);
 
       const result = await source.searchMovie('Nonexistent Movie');
 
       expect(result).toBeNull();
-      const warnings = emitter.mock.calls
-        .map((c) => c[0])
-        .filter((e) => e.level === 'warning');
+      const warnings = emitter.mock.calls.map((c) => c[0]).filter((e) => e.level === 'warning');
       expect(warnings.length).toBe(0);
     });
   });

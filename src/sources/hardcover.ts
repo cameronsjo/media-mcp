@@ -1,3 +1,4 @@
+import { normalizeError } from '../utils/errors.js';
 import { z } from 'zod';
 import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
@@ -140,9 +141,10 @@ export class HardcoverSource {
       return bookData;
     } catch (error) {
       this.logger.error('hardcover', {
+        ...normalizeError(error, SOURCE),
         action: 'isbn_lookup_failed',
         isbn: cleanISBN,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
       return null;
     }
@@ -246,10 +248,11 @@ export class HardcoverSource {
       return bookData;
     } catch (error) {
       this.logger.error('hardcover', {
+        ...normalizeError(error, SOURCE),
         action: 'search_failed',
         title,
         author,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
       return null;
     }

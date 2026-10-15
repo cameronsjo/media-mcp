@@ -1,3 +1,4 @@
+import { normalizeError, SourceError } from './errors.js';
 import { request, type Dispatcher } from 'undici';
 import { Logger } from './logger.js';
 import { RateLimiter, sleep } from './rate-limiter.js';
@@ -137,7 +138,7 @@ export class HttpClient {
     extraHeaders?: Record<string, string>,
     retries: number = 3
   ): Promise<HttpResponse<T>> {
-    let lastError: Error | null = null;
+    let lastError: unknown;
 
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
@@ -214,13 +215,14 @@ export class HttpClient {
           headers,
         };
       } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
+        lastError = error;
 
         this.logger.error('http', {
+          ...normalizeError(error, this.source),
           action: 'request_failed',
           method,
           url,
-          error: lastError.message,
+          error: normalizeError(error, this.source).message,
           attempt,
           source: this.source,
         });
@@ -232,6 +234,16 @@ export class HttpClient {
       }
     }
 
-    throw lastError ?? new Error('Request failed after retries');
+    const failure = normalizeError(
+      lastError ?? new Error('Request failed after retries'),
+      this.source
+    );
+    throw new SourceError(
+      failure.message,
+      failure.code,
+      failure.source,
+      failure.retryable,
+      failure.retry_after_seconds
+    );
   }
 }

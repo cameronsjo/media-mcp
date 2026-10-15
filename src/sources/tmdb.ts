@@ -1,3 +1,4 @@
+import { normalizeError, errorFromHttpStatus, SourceError } from '../utils/errors.js';
 import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
 import { normalizeForComparison } from '../utils/strings.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
@@ -115,6 +116,8 @@ export class TMDBSource {
           title,
           year,
         });
+        if (response.status !== 404)
+          throw errorFromHttpStatus(SOURCE, response.status, response.headers['retry-after']);
         return null;
       }
 
@@ -133,11 +136,13 @@ export class TMDBSource {
       return match.id;
     } catch (error) {
       this.logger.error('tmdb', {
+        ...normalizeError(error, SOURCE),
         action: 'search_movie_failed',
         title,
         year,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
+      if (error instanceof SourceError) throw error;
       return null;
     }
   }
@@ -155,7 +160,7 @@ export class TMDBSource {
 
     try {
       // Fetch movie details, credits, and watch providers in parallel
-      const [detailsRes, creditsRes, providersRes] = await Promise.all([
+      const [detailsResponse, creditsResponse, providersResponse] = await Promise.allSettled([
         this.client.get<TMDBMovieDetails>(`/movie/${tmdbId}`, {
           params: { append_to_response: 'external_ids' },
         }),
@@ -163,9 +168,17 @@ export class TMDBSource {
         this.client.get<TMDBWatchProviders>(`/movie/${tmdbId}/watch/providers`),
       ]);
 
+      // A primary not-found/status response takes precedence over optional
+      // enrichment failures, even when those requests reject concurrently.
+      if (detailsResponse.status === 'rejected') throw detailsResponse.reason;
+      const detailsRes = detailsResponse.value;
       if (detailsRes.status !== 200) {
-        return null;
+        throw errorFromHttpStatus(SOURCE, detailsRes.status, detailsRes.headers['retry-after']);
       }
+      if (creditsResponse.status === 'rejected') throw creditsResponse.reason;
+      if (providersResponse.status === 'rejected') throw providersResponse.reason;
+      const creditsRes = creditsResponse.value;
+      const providersRes = providersResponse.value;
 
       const details = TMDBMovieDetailsSchema.parse(detailsRes.data);
       let parsedCredits: TMDBMovieCredits | null = null;
@@ -267,10 +280,12 @@ export class TMDBSource {
       return result;
     } catch (error) {
       this.logger.error('tmdb', {
+        ...normalizeError(error, SOURCE),
         action: 'get_movie_failed',
         tmdb_id: tmdbId,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
+      if (error instanceof SourceError) throw error;
       return null;
     }
   }
@@ -300,6 +315,8 @@ export class TMDBSource {
           title,
           year,
         });
+        if (response.status !== 404)
+          throw errorFromHttpStatus(SOURCE, response.status, response.headers['retry-after']);
         return null;
       }
 
@@ -318,11 +335,13 @@ export class TMDBSource {
       return match.id;
     } catch (error) {
       this.logger.error('tmdb', {
+        ...normalizeError(error, SOURCE),
         action: 'search_tv_failed',
         title,
         year,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
+      if (error instanceof SourceError) throw error;
       return null;
     }
   }
@@ -354,7 +373,7 @@ export class TMDBSource {
       });
 
       if (response.status !== 200) {
-        return null;
+        throw errorFromHttpStatus(SOURCE, response.status, response.headers['retry-after']);
       }
 
       const details = TMDBTVDetailsSchema.parse(response.data);
@@ -421,10 +440,12 @@ export class TMDBSource {
       return result;
     } catch (error) {
       this.logger.error('tmdb', {
+        ...normalizeError(error, SOURCE),
         action: 'get_tv_failed',
         tmdb_id: tmdbId,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
+      if (error instanceof SourceError) throw error;
       return null;
     }
   }

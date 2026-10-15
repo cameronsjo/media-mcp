@@ -1,3 +1,4 @@
+import { SourceError } from '../utils/errors.js';
 import { z } from 'zod';
 import type { BookResult } from '../types/book.js';
 import type { MovieResult } from '../types/movie.js';
@@ -50,11 +51,10 @@ export class GenerateFrontmatterTool {
         frontmatter = this.generateTVFrontmatter(result as TVResult, input.template);
         break;
       default:
-        throw {
-          code: 'VALIDATION_ERROR',
-          message: 'Unable to determine media type from lookup result',
-          retryable: false,
-        };
+        throw new SourceError(
+          'Unable to determine media type from lookup result',
+          'VALIDATION_ERROR'
+        );
     }
 
     // Add custom fields if provided
@@ -95,7 +95,7 @@ export class GenerateFrontmatterTool {
       return 'movie';
     }
 
-    throw new Error('Unable to determine media type');
+    throw new SourceError('Unable to determine media type', 'VALIDATION_ERROR');
   }
 
   private generateBookFrontmatter(book: BookResult, template: string): Record<string, unknown> {

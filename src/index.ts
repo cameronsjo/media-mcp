@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { normalizeError, SourceError } from './utils/errors.js';
 
 import { createRequire } from 'module';
 import { createMcpHandler, Server } from '@modelcontextprotocol/server';
@@ -297,7 +298,11 @@ async function executeToolCall(
 
       case 'lookup_movie': {
         if (!lookupMovieTool) {
-          throw new Error('TMDB_API_KEY not configured. Movie lookups are unavailable.');
+          throw new SourceError(
+            'TMDB_API_KEY not configured. Movie lookups are unavailable.',
+            'AUTH_ERROR',
+            'tmdb'
+          );
         }
         const input = LookupMovieInputSchema.parse(args);
         const result = await lookupMovieTool.execute(input);
@@ -308,7 +313,11 @@ async function executeToolCall(
 
       case 'lookup_tv': {
         if (!lookupTVTool) {
-          throw new Error('TMDB_API_KEY not configured. TV lookups are unavailable.');
+          throw new SourceError(
+            'TMDB_API_KEY not configured. TV lookups are unavailable.',
+            'AUTH_ERROR',
+            'tmdb'
+          );
         }
         const input = LookupTVInputSchema.parse(args);
         const result = await lookupTVTool.execute(input);
@@ -327,7 +336,11 @@ async function executeToolCall(
 
       case 'batch_lookup': {
         if (!batchLookupTool) {
-          throw new Error('TMDB_API_KEY not configured. Batch lookups require movie/TV support.');
+          throw new SourceError(
+            'TMDB_API_KEY not configured. Batch lookups require movie/TV support.',
+            'AUTH_ERROR',
+            'tmdb'
+          );
         }
         const input = BatchLookupInputSchema.parse(args);
         const result = await batchLookupTool.execute(input);
@@ -337,13 +350,14 @@ async function executeToolCall(
       }
 
       default:
-        throw new Error(`Unknown tool: ${name}`);
+        throw new SourceError(`Unknown tool: ${name}`, 'VALIDATION_ERROR');
     }
   } catch (error) {
     success = false;
-    const errorObj = error as { code?: string; message?: string };
+    const errorObj = normalizeError(error);
 
     logger.error('main', {
+      ...errorObj,
       action: 'tool_error',
       tool: name,
       error: errorObj.message || String(error),
@@ -354,10 +368,7 @@ async function executeToolCall(
         {
           type: 'text',
           text: JSON.stringify({
-            error: {
-              code: errorObj.code || 'UNKNOWN_ERROR',
-              message: errorObj.message || 'An unknown error occurred',
-            },
+            error: errorObj,
           }),
         },
       ],

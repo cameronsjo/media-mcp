@@ -234,6 +234,27 @@ describe('entrypoint production wiring', () => {
       expect(frontmatter.isError).not.toBe(true);
       expect(frontmatter.content[0].text).toContain('title: "Wiring Test"');
 
+      const invalid = (await callTool({ params: { name: 'lookup_book', arguments: {} } })) as {
+        content: Array<{ text: string }>;
+        isError?: boolean;
+      };
+      expect(invalid.isError).toBe(true);
+      expect(JSON.parse(invalid.content[0].text)).toMatchObject({
+        error: { code: 'VALIDATION_ERROR', retryable: false, message: expect.any(String) },
+      });
+      const unknown = (await callTool({ params: { name: 'unknown_tool', arguments: {} } })) as {
+        content: Array<{ text: string }>;
+        isError?: boolean;
+      };
+      expect(unknown.isError).toBe(true);
+      expect(JSON.parse(unknown.content[0].text)).toEqual({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Unknown tool: unknown_tool',
+          retryable: false,
+        },
+      });
+
       expect(await setLoggingLevel({ params: { level: 'debug' } })).toEqual({});
       expect(setLevel.mock.calls.at(-1)).toEqual(['debug']);
       expect(notification).toHaveBeenCalledWith({
