@@ -346,6 +346,42 @@ describe('LookupBookTool integration paths', () => {
     expect(result.series.name).toBe('Existing Series');
     expect(result._meta.sources_failed).toEqual(['google_books', 'goodreads', 'hardcover']);
   });
+
+  it('prefers structured series metadata over parsing another source title', async () => {
+    const openLibrary = makeOpenLibrary({
+      searchByTitleAuthor: vi.fn().mockResolvedValue(
+        partialBook({
+          source: 'open_library',
+          title: 'Book Name (Parsed Series #1)',
+        })
+      ),
+    });
+    const hardcover = makeHardcover({
+      searchByTitleAuthor: vi.fn().mockResolvedValue(
+        partialBook({
+          source: 'hardcover',
+          title: 'Book Name',
+          series: { name: 'Canonical Series', position: 7 },
+        })
+      ),
+    });
+    const tool = new LookupBookTool(openLibrary, testLogger(), { hardcover });
+
+    const result = await tool.execute(
+      LookupBookInputSchema.parse({
+        title: 'Book Name',
+        sources: ['open_library', 'hardcover'],
+        compact: false,
+      })
+    );
+
+    expect(result.series).toEqual({
+      name: 'Canonical Series',
+      position: 7,
+      total_books: null,
+    });
+    expect(result.title).toBe('Book Name');
+  });
 });
 
 describe('LookupMovieTool integration paths', () => {
