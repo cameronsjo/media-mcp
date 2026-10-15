@@ -1,6 +1,7 @@
 import { normalizeError } from '../utils/errors.js';
 import * as cheerio from 'cheerio';
 import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
+import { RATE_LIMITS } from '../utils/constants.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
 import { delay } from '../utils/rate-limiter.js';
 import { normalizeShelf } from '../utils/strings.js';
@@ -41,8 +42,8 @@ export class GoodreadsSource {
 
     // Configure rate limiting - be respectful to Goodreads
     rateLimiter.configure(SOURCE, {
-      requestsPerWindow: 20,
-      windowMs: 60000, // 20 requests per minute max
+      requestsPerWindow: RATE_LIMITS.GOODREADS.REQUESTS_PER_WINDOW,
+      windowMs: RATE_LIMITS.GOODREADS.WINDOW_MS, // 20 requests per minute max
     });
 
     this.client = new HttpClient(
@@ -83,7 +84,10 @@ export class GoodreadsSource {
 
     try {
       // Add delay for anti-detection
-      await delay(this.config.delayMs, this.config.delayMs * 1.5);
+      await delay(
+        this.config.delayMs,
+        this.config.delayMs * RATE_LIMITS.GOODREADS.DELAY_JITTER_MULTIPLIER
+      );
 
       // Search for the book
       const searchQuery = author ? `${title} ${author}` : title;
@@ -169,7 +173,10 @@ export class GoodreadsSource {
     }
 
     try {
-      await delay(this.config.delayMs, this.config.delayMs * 1.5);
+      await delay(
+        this.config.delayMs,
+        this.config.delayMs * RATE_LIMITS.GOODREADS.DELAY_JITTER_MULTIPLIER
+      );
 
       const response = await this.client.get<string>(`/book/show/${bookId}`, {
         headers: {
@@ -344,7 +351,10 @@ export class GoodreadsSource {
     }
 
     try {
-      await delay(this.config.delayMs, this.config.delayMs * 1.5);
+      await delay(
+        this.config.delayMs,
+        this.config.delayMs * RATE_LIMITS.GOODREADS.DELAY_JITTER_MULTIPLIER
+      );
 
       const response = await this.client.get<string>(`/series/${seriesId}`, {
         headers: {

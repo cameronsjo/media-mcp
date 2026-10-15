@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RATE_LIMITS, TIMING } from './constants.js';
 
 function safeParseInt(value: string): number | undefined {
   const parsed = parseInt(value, 10);
@@ -52,19 +53,19 @@ export const ConfigSchema = z.object({
   // Cache settings
   cacheEnabled: z.boolean().default(true),
   cachePath: z.string().default('./cache.db'),
-  cacheTtlBooks: z.number().default(86400 * 7), // 7 days in seconds
-  cacheTtlMovies: z.number().default(86400), // 1 day in seconds
-  cacheTtlTv: z.number().default(86400), // 1 day in seconds
+  cacheTtlBooks: z.number().default(TIMING.SECONDS_PER_DAY * 7), // 7 days in seconds
+  cacheTtlMovies: z.number().default(TIMING.SECONDS_PER_DAY), // 1 day in seconds
+  cacheTtlTv: z.number().default(TIMING.SECONDS_PER_DAY), // 1 day in seconds
   cacheCleanupIntervalMs: z
     .number()
     .int()
     .positive()
     .max(2_147_483_647)
-    .default(60 * 60 * 1000), // 1 hour
+    .default(TIMING.CACHE_CLEANUP_INTERVAL_MS), // 1 hour
 
   // Rate limiting
-  rateLimitRequestsPerMinute: z.number().default(30),
-  rateLimitRetryAttempts: z.number().default(3),
+  rateLimitRequestsPerMinute: z.number().default(RATE_LIMITS.DEFAULT_REQUESTS_PER_MINUTE),
+  rateLimitRetryAttempts: z.number().default(RATE_LIMITS.DEFAULT_RETRY_ATTEMPTS),
 
   // Feature flags
   enableGoodreadsScraping: z.boolean().default(true),

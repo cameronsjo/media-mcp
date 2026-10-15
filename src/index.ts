@@ -32,6 +32,7 @@ import {
 } from './tools/index.js';
 import { StreamableHTTPTransport } from './transport/http-transport.js';
 import { loadConfig, getSourceStatusMessage } from './utils/config.js';
+import { RATE_LIMITS, TIMING } from './utils/constants.js';
 import { initTelemetry, shutdownTelemetry, recordToolCall } from './utils/telemetry.js';
 import type { LogLevel } from './types/common.js';
 
@@ -66,7 +67,7 @@ const config = {
   cache: {
     enabled: appConfig.cacheEnabled,
     path: appConfig.cachePath,
-    defaultTTLHours: Math.floor(appConfig.cacheTtlBooks / 3600),
+    defaultTTLHours: Math.floor(appConfig.cacheTtlBooks / TIMING.SECONDS_PER_HOUR),
     cleanupIntervalMs: appConfig.cacheCleanupIntervalMs,
   } as CacheOptions,
   logging: {
@@ -74,7 +75,7 @@ const config = {
   },
   goodreads: {
     enabled: appConfig.enableGoodreadsScraping,
-    delayMs: 2000,
+    delayMs: RATE_LIMITS.GOODREADS.BASE_DELAY_MS,
   },
 };
 
@@ -110,14 +111,14 @@ Environment Variables:
   Cache:
     MCP_CACHE_ENABLED             Enable caching (default: true)
     MCP_CACHE_PATH                SQLite cache database path (default: ./cache.db)
-    MCP_CACHE_TTL_BOOKS           Book cache TTL in seconds (default: 604800)
-    MCP_CACHE_TTL_MOVIES          Movie cache TTL in seconds (default: 86400)
-    MCP_CACHE_TTL_TV              TV cache TTL in seconds (default: 86400)
-    MCP_CACHE_CLEANUP_INTERVAL_MS Expired-entry cleanup interval in milliseconds (default: 3600000)
+    MCP_CACHE_TTL_BOOKS           Book cache TTL in seconds (default: ${TIMING.SECONDS_PER_DAY * 7})
+    MCP_CACHE_TTL_MOVIES          Movie cache TTL in seconds (default: ${TIMING.SECONDS_PER_DAY})
+    MCP_CACHE_TTL_TV              TV cache TTL in seconds (default: ${TIMING.SECONDS_PER_DAY})
+    MCP_CACHE_CLEANUP_INTERVAL_MS Expired-entry cleanup interval in milliseconds (default: ${TIMING.CACHE_CLEANUP_INTERVAL_MS})
 
   Rate Limiting:
-    MCP_RATE_LIMIT_RPM            Requests per minute (default: 30)
-    MCP_RATE_LIMIT_RETRIES        Retry attempts (default: 3)
+    MCP_RATE_LIMIT_RPM            Requests per minute (default: ${RATE_LIMITS.DEFAULT_REQUESTS_PER_MINUTE})
+    MCP_RATE_LIMIT_RETRIES        Retry attempts (default: ${RATE_LIMITS.DEFAULT_RETRY_ATTEMPTS})
 
   Features:
     MCP_ENABLE_GOODREADS_SCRAPING Enable Goodreads scraping (default: true)

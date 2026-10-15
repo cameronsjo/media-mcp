@@ -1,5 +1,6 @@
 import { normalizeError, errorFromHttpStatus, SourceError } from '../utils/errors.js';
 import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
+import { RATE_LIMITS } from '../utils/constants.js';
 import { normalizeForComparison } from '../utils/strings.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
 import type { MovieResult, CastMember, MovieCollection } from '../types/movie.js';
@@ -40,8 +41,8 @@ export class TMDBSource {
 
     // Configure rate limiting - TMDB allows 40 requests per 10 seconds
     rateLimiter.configure(SOURCE, {
-      requestsPerWindow: 40,
-      windowMs: 10000,
+      requestsPerWindow: RATE_LIMITS.TMDB.REQUESTS_PER_WINDOW,
+      windowMs: RATE_LIMITS.TMDB.WINDOW_MS,
     });
 
     // TMDB issues two key types and they use different auth schemes:

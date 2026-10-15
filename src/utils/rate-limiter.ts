@@ -1,3 +1,4 @@
+import { RATE_LIMITS } from './constants.js';
 import { Logger } from './logger.js';
 
 interface RateLimitConfig {
@@ -80,7 +81,10 @@ export class RateLimiter {
     }
 
     // Exponential backoff: 2^attempt seconds (2s, 4s, 8s, 16s, 32s, max 60s)
-    const backoffMs = Math.min(Math.pow(2, attempt) * 1000, 60000);
+    const backoffMs = Math.min(
+      Math.pow(2, attempt) * RATE_LIMITS.BACKOFF_BASE_MS,
+      RATE_LIMITS.MAX_BACKOFF_MS
+    );
     state.backoffUntil = Math.max(state.backoffUntil, Date.now() + backoffMs);
 
     this.logger.warning('rate-limiter', {

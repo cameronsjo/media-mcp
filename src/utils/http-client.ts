@@ -1,5 +1,6 @@
 import { normalizeError, SourceError } from './errors.js';
 import { request, type Dispatcher } from 'undici';
+import { RATE_LIMITS, TIMING } from './constants.js';
 import { Logger } from './logger.js';
 import { RateLimiter, sleep } from './rate-limiter.js';
 
@@ -47,7 +48,7 @@ export class HttpClient {
     this.baseUrl = options.baseUrl ?? '';
     this.headers = options.headers ?? {};
     this.params = options.params ?? {};
-    this.timeout = options.timeout ?? 30000;
+    this.timeout = options.timeout ?? TIMING.HTTP_REQUEST_TIMEOUT_MS;
     this.logger = logger;
     this.rateLimiter = rateLimiter;
   }
@@ -136,7 +137,7 @@ export class HttpClient {
     url: string,
     body?: unknown,
     extraHeaders?: Record<string, string>,
-    retries: number = 3
+    retries: number = RATE_LIMITS.DEFAULT_RETRY_ATTEMPTS
   ): Promise<HttpResponse<T>> {
     let lastError: unknown;
 
@@ -228,7 +229,7 @@ export class HttpClient {
         });
 
         if (attempt < retries) {
-          const backoffMs = Math.pow(2, attempt) * 1000;
+          const backoffMs = Math.pow(2, attempt) * RATE_LIMITS.BACKOFF_BASE_MS;
           await sleep(backoffMs);
         }
       }

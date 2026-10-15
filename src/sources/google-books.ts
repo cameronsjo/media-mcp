@@ -1,5 +1,6 @@
 import { normalizeError } from '../utils/errors.js';
 import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
+import { RATE_LIMITS } from '../utils/constants.js';
 import { normalizeForComparison } from '../utils/strings.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
 import type { PartialBookData, BookSource } from '../types/book.js';
@@ -22,8 +23,10 @@ export class GoogleBooksSource {
 
     // Configure rate limiting - Google Books allows 1000/day without key, more with key
     rateLimiter.configure(SOURCE, {
-      requestsPerWindow: apiKey ? 100 : 50,
-      windowMs: 60000,
+      requestsPerWindow: apiKey
+        ? RATE_LIMITS.GOOGLE_BOOKS.REQUESTS_PER_WINDOW_WITH_API_KEY
+        : RATE_LIMITS.GOOGLE_BOOKS.REQUESTS_PER_WINDOW_WITHOUT_API_KEY,
+      windowMs: RATE_LIMITS.GOOGLE_BOOKS.WINDOW_MS,
     });
 
     this.client = new HttpClient(SOURCE, { baseUrl: BASE_URL }, logger, rateLimiter);
