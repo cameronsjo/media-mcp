@@ -167,16 +167,22 @@ export function extractSeriesFromTitle(title: string): {
     /^(.+?)\s*#(\d+(?:\.\d+)?)$/,
     // "Title, Book 1"
     /^(.+?),\s*Book\s+(\d+(?:\.\d+)?)$/i,
+    // "Title - Series Book 1" when the series is explicitly marked as a series.
+    // A bare dash is ambiguous with a subtitle (for example, The Hobbit - Or
+    // There and Back Again Book 1), so leave those titles untouched.
+    /^(.+?)\s+-\s+((?:(?:.+?\b)?Series\b).*?)\s+Book\s+(\d+(?:\.\d+)?)$/i,
   ];
 
   for (const pattern of patterns) {
     const match = title.match(pattern);
     if (match) {
       if (match.length === 4) {
+        const seriesName = match[2].trim();
+
         // Pattern with series name and position
         return {
           cleanTitle: match[1].trim(),
-          seriesName: match[2].trim(),
+          seriesName,
           seriesPosition: parseFloat(match[3]),
         };
       } else if (match.length === 3) {
@@ -187,6 +193,23 @@ export function extractSeriesFromTitle(title: string): {
           seriesPosition: parseFloat(match[2]),
         };
       }
+    }
+  }
+
+  // "Title, Part 1 of Series" (or the same form with a colon). Keep this
+  // after established patterns so parenthetical/hash metadata keeps precedence.
+  // The title delimiter is required; a standalone "Part 1 of Series" is ambiguous.
+  const partOfSeriesPattern = /^(.+?)[,:]\s*Part\s+(\d+(?:\.\d+)?)\s+of\s+(.+?)$/i;
+  const partMatch = title.match(partOfSeriesPattern);
+  if (partMatch) {
+    const seriesName = partMatch[3].trim();
+    // "Title, Part 1 of 2" is a format/volume count, not a series name.
+    if (!/^\d+(?:\.\d+)?$/.test(seriesName)) {
+      return {
+        cleanTitle: partMatch[1].trim(),
+        seriesName,
+        seriesPosition: parseFloat(partMatch[2]),
+      };
     }
   }
 

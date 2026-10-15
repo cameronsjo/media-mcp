@@ -189,6 +189,8 @@ Look up book metadata by title, author, or ISBN.
 
 Responses are **compact by default** — `description` is nulled and the noisy `shelves`/`subjects` arrays dropped (the bulk of the payload), keeping genres, tropes, series, ratings, cover, and identifiers. This keeps batch lookups within inline token limits. Pass `compact: false` to get the full description back.
 
+When a source supplies structured series metadata, it takes precedence over title parsing. The conservative title fallback supports the existing parenthesized, hash, and `Book N` forms, plus `Title - <name containing "Series"> Book N` and delimited `Title, Part N of Series` or `Title: Part N of Series`. Numeric-only `Part N of M`, standalone `Part N of Series`, and unmarked dash subtitles remain part of the title.
+
 ### lookup_movie
 
 Look up movie metadata by title and optional year.

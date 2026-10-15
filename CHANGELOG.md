@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Added an attributed real-title corpus for series parsing, rejecting numeric-only `Part N of M` labels and ambiguous dash or standalone `Part N of Series` strings while supporting explicitly marked `Series Book N` and delimited `Part N of Series` forms.
+- Structured series metadata from a book source now takes precedence over title parsing from another source.
 - Removed an unreachable series-extraction pattern and added a regression test pinning existing colon-subtitle behavior (for example, `Dune: Messiah (Book 2)`).
 - Goodreads scraping now emits warning diagnostics when search or detail selectors produce no usable data.
 - Fixed non-ASCII fuzzy similarity by preserving Unicode letters and combining marks, with NFC normalization for equivalent spellings.

@@ -16,8 +16,12 @@ export const LookupBookInputSchema = z.object({
     .array(z.enum(['open_library', 'google_books', 'goodreads', 'hardcover']))
     .optional()
     .describe('Sources to query (defaults to all available)'),
-  compact: z.boolean().default(true)
-    .describe('Trim the response (default): null the description and drop shelves/subjects (the bulk of the payload), keeping genres/tropes/series/ratings/cover/identifiers. Set false for the full description.'),
+  compact: z
+    .boolean()
+    .default(true)
+    .describe(
+      'Trim the response (default): null the description and drop shelves/subjects (the bulk of the payload), keeping genres/tropes/series/ratings/cover/identifiers. Set false for the full description.'
+    ),
 });
 
 /**
@@ -75,7 +79,12 @@ export class LookupBookTool {
     });
 
     // Determine which sources to query
-    const requestedSources = input.sources ?? ['open_library', 'google_books', 'goodreads', 'hardcover'];
+    const requestedSources = input.sources ?? [
+      'open_library',
+      'google_books',
+      'goodreads',
+      'hardcover',
+    ];
 
     // Query sources in parallel for better performance
     const searchPromises: Promise<void>[] = [];
@@ -122,19 +131,22 @@ export class LookupBookTool {
       };
     }
 
-    // Try to extract series info from title if not found in results
+    // Clean title series suffixes from every source. A parsed title from one
+    // source must not override structured series metadata returned by another.
+    const hasSourceSeries = results.some((result) => Boolean(result.series?.name));
     for (const result of results) {
-      if (!result.series?.name) {
-        const seriesInfo = extractSeriesFromTitle(result.title || input.title);
-        if (seriesInfo.seriesName || seriesInfo.seriesPosition) {
+      const seriesInfo = extractSeriesFromTitle(result.title || input.title);
+      if (seriesInfo.seriesName || seriesInfo.seriesPosition) {
+        if (!hasSourceSeries) {
           result.series = {
             name: seriesInfo.seriesName ?? undefined,
             position: seriesInfo.seriesPosition ?? undefined,
           };
-          // Update title to clean version if we extracted series
-          if (seriesInfo.cleanTitle !== result.title) {
-            result.title = seriesInfo.cleanTitle;
-          }
+        }
+        // Update title to clean version if we extracted series, even when
+        // structured metadata from another source owns the series field.
+        if (seriesInfo.cleanTitle !== result.title) {
+          result.title = seriesInfo.cleanTitle;
         }
       }
     }

@@ -9,6 +9,10 @@ import {
   normalize,
   stringSimilarity,
 } from '../../src/utils/fuzzy-match.js';
+import {
+  realSeriesTitleCorpus,
+  syntheticSeriesTitleFixtures,
+} from '../fixtures/series-title-corpus.js';
 
 describe('levenshteinDistance', () => {
   it('returns zero for equal strings, including two empty strings', () => {
@@ -131,6 +135,15 @@ describe('bookMatchScore', () => {
 });
 
 describe('extractSeriesFromTitle', () => {
+  it.each(realSeriesTitleCorpus)('matches attributed real-title fixture $id', (fixture) => {
+    expect(fixture.sourceUrl).toMatch(/^https:\/\//);
+    expect(extractSeriesFromTitle(fixture.title)).toEqual(fixture.expected);
+  });
+
+  it.each(syntheticSeriesTitleFixtures)('matches synthetic regression fixture $id', (fixture) => {
+    expect(extractSeriesFromTitle(fixture.title)).toEqual(fixture.expected);
+  });
+
   it('extracts a series name and integer position from a hash pattern', () => {
     expect(extractSeriesFromTitle('The Shadow (Shadows of London #2)')).toEqual({
       cleanTitle: 'The Shadow',
@@ -207,6 +220,19 @@ describe('extractSeriesFromTitle', () => {
     expect(extractSeriesFromTitle('The Hobbit - Or There and Back Again (Book 1)')).toEqual({
       cleanTitle: 'The Hobbit - Or There and Back Again',
       seriesName: null,
+      seriesPosition: 1,
+    });
+  });
+
+  it.each([
+    ['Title (86 #1)', '86'],
+    ['Title (86, #1)', '86,'],
+    ['Title (86 Book 1)', '86'],
+    ['Title: 86 #1', '86'],
+  ])('preserves numeric series names in existing formats: %s', (title, seriesName) => {
+    expect(extractSeriesFromTitle(title)).toEqual({
+      cleanTitle: 'Title',
+      seriesName,
       seriesPosition: 1,
     });
   });
