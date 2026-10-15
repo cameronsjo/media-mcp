@@ -1,3 +1,4 @@
+import { normalizeError, errorFromHttpStatus, SourceError } from '../utils/errors.js';
 import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
 import { normalizeForComparison } from '../utils/strings.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
@@ -115,6 +116,8 @@ export class TMDBSource {
           title,
           year,
         });
+        if (response.status !== 404)
+          throw errorFromHttpStatus(SOURCE, response.status, response.headers['retry-after']);
         return null;
       }
 
@@ -133,11 +136,13 @@ export class TMDBSource {
       return match.id;
     } catch (error) {
       this.logger.error('tmdb', {
+        ...normalizeError(error, SOURCE),
         action: 'search_movie_failed',
         title,
         year,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
+      if (error instanceof SourceError) throw error;
       return null;
     }
   }
@@ -164,6 +169,8 @@ export class TMDBSource {
       ]);
 
       if (detailsRes.status !== 200) {
+        if (detailsRes.status !== 404)
+          throw errorFromHttpStatus(SOURCE, detailsRes.status, detailsRes.headers['retry-after']);
         return null;
       }
 
@@ -267,10 +274,12 @@ export class TMDBSource {
       return result;
     } catch (error) {
       this.logger.error('tmdb', {
+        ...normalizeError(error, SOURCE),
         action: 'get_movie_failed',
         tmdb_id: tmdbId,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
+      if (error instanceof SourceError) throw error;
       return null;
     }
   }
@@ -300,6 +309,8 @@ export class TMDBSource {
           title,
           year,
         });
+        if (response.status !== 404)
+          throw errorFromHttpStatus(SOURCE, response.status, response.headers['retry-after']);
         return null;
       }
 
@@ -318,11 +329,13 @@ export class TMDBSource {
       return match.id;
     } catch (error) {
       this.logger.error('tmdb', {
+        ...normalizeError(error, SOURCE),
         action: 'search_tv_failed',
         title,
         year,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
+      if (error instanceof SourceError) throw error;
       return null;
     }
   }
@@ -354,6 +367,8 @@ export class TMDBSource {
       });
 
       if (response.status !== 200) {
+        if (response.status !== 404)
+          throw errorFromHttpStatus(SOURCE, response.status, response.headers['retry-after']);
         return null;
       }
 
@@ -421,10 +436,12 @@ export class TMDBSource {
       return result;
     } catch (error) {
       this.logger.error('tmdb', {
+        ...normalizeError(error, SOURCE),
         action: 'get_tv_failed',
         tmdb_id: tmdbId,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
+      if (error instanceof SourceError) throw error;
       return null;
     }
   }

@@ -1,3 +1,4 @@
+import { RateLimitError } from '../../src/utils/errors.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { HttpClient } from '../../src/utils/http-client.js';
 import { Logger } from '../../src/utils/logger.js';
@@ -143,6 +144,32 @@ describe('HttpClient', () => {
     });
   });
 
+  it('retains typed retry metadata and safely handles malformed thrown objects', async () => {
+    const client = new HttpClient(
+      'test',
+      { baseUrl: 'https://api.example.com' },
+      logger,
+      rateLimiter
+    );
+    mockRequest.mockRejectedValueOnce(new RateLimitError('test', 7));
+    await expect(client.get('/rate', { retries: 1 })).rejects.toMatchObject({
+      code: 'RATE_LIMITED',
+      retry_after_seconds: 7,
+      retryable: true,
+    });
+    mockRequest.mockRejectedValueOnce({
+      code: 'AUTH_ERROR',
+      message: 'Invalid key',
+      retryable: false,
+    });
+    await expect(client.get('/auth', { retries: 1 })).rejects.toMatchObject({
+      code: 'AUTH_ERROR',
+      message: 'Invalid key',
+      source: 'test',
+      retryable: false,
+    });
+  });
+
   describe('rate limiting', () => {
     it('counts each dispatched request once', async () => {
       rateLimiter.configure('test', { requestsPerWindow: 2, windowMs: 1000 });
@@ -219,7 +246,12 @@ describe('HttpClient', () => {
         mockRequest.mockRejectedValueOnce(new Error('network down'));
         mockJsonResponse({ ok: true });
 
-        await expect(client.get('/failure', { retries: 1 })).rejects.toThrow('network down');
+        await expect(client.get('/failure', { retries: 1 })).rejects.toMatchObject({
+          message: 'network down',
+          code: 'SOURCE_ERROR',
+          source: 'test',
+          retryable: true,
+        });
 
         const nextRequest = client.get('/next', { retries: 1 });
         await vi.advanceTimersByTimeAsync(999);

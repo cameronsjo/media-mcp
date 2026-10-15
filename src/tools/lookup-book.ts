@@ -1,3 +1,4 @@
+import { NotFoundError, normalizeError } from '../utils/errors.js';
 import { z } from 'zod';
 import type { BookResult, PartialBookData, LookupBookInput, BookSource } from '../types/book.js';
 import { OpenLibrarySource } from '../sources/open-library.js';
@@ -16,8 +17,12 @@ export const LookupBookInputSchema = z.object({
     .array(z.enum(['open_library', 'google_books', 'goodreads', 'hardcover']))
     .optional()
     .describe('Sources to query (defaults to all available)'),
-  compact: z.boolean().default(true)
-    .describe('Trim the response (default): null the description and drop shelves/subjects (the bulk of the payload), keeping genres/tropes/series/ratings/cover/identifiers. Set false for the full description.'),
+  compact: z
+    .boolean()
+    .default(true)
+    .describe(
+      'Trim the response (default): null the description and drop shelves/subjects (the bulk of the payload), keeping genres/tropes/series/ratings/cover/identifiers. Set false for the full description.'
+    ),
 });
 
 /**
@@ -75,7 +80,12 @@ export class LookupBookTool {
     });
 
     // Determine which sources to query
-    const requestedSources = input.sources ?? ['open_library', 'google_books', 'goodreads', 'hardcover'];
+    const requestedSources = input.sources ?? [
+      'open_library',
+      'google_books',
+      'goodreads',
+      'hardcover',
+    ];
 
     // Query sources in parallel for better performance
     const searchPromises: Promise<void>[] = [];
@@ -115,11 +125,9 @@ export class LookupBookTool {
         duration_ms: Date.now() - startTime,
       });
 
-      throw {
-        code: 'NOT_FOUND',
-        message: `No book found matching "${input.title}"${input.author ? ` by ${input.author}` : ''}`,
-        retryable: false,
-      };
+      throw new NotFoundError(
+        `No book found matching "${input.title}"${input.author ? ` by ${input.author}` : ''}`
+      );
     }
 
     // Try to extract series info from title if not found in results
@@ -184,8 +192,9 @@ export class LookupBookTool {
     } catch (error) {
       this.logger.error('lookup-book', {
         action: 'source_error',
+        ...normalizeError(error),
         source: 'open_library',
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error).message,
       });
       sourcesFailed.push('open_library');
     }
@@ -222,8 +231,9 @@ export class LookupBookTool {
     } catch (error) {
       this.logger.error('lookup-book', {
         action: 'source_error',
+        ...normalizeError(error),
         source: 'google_books',
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error).message,
       });
       sourcesFailed.push('google_books');
     }
@@ -250,8 +260,9 @@ export class LookupBookTool {
     } catch (error) {
       this.logger.error('lookup-book', {
         action: 'source_error',
+        ...normalizeError(error),
         source: 'goodreads',
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error).message,
       });
       sourcesFailed.push('goodreads');
     }
@@ -286,8 +297,9 @@ export class LookupBookTool {
     } catch (error) {
       this.logger.error('lookup-book', {
         action: 'source_error',
+        ...normalizeError(error),
         source: 'hardcover',
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error).message,
       });
       sourcesFailed.push('hardcover');
     }

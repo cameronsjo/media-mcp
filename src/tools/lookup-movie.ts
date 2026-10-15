@@ -1,3 +1,4 @@
+import { NotFoundError, SourceError } from '../utils/errors.js';
 import { z } from 'zod';
 import type { MovieResult, LookupMovieInput, RegionalWatchProviders } from '../types/movie.js';
 import { TMDBSource } from '../sources/tmdb.js';
@@ -5,14 +6,29 @@ import { Logger } from '../utils/logger.js';
 
 export const LookupMovieInputSchema = z.object({
   title: z.string().min(1).describe('Movie title to search for'),
-  year: z.number().int().min(1800).max(2100).optional()
+  year: z
+    .number()
+    .int()
+    .min(1800)
+    .max(2100)
+    .optional()
     .describe('Release year (improves matching accuracy)'),
-  tmdb_id: z.number().int().positive().optional()
+  tmdb_id: z
+    .number()
+    .int()
+    .positive()
+    .optional()
     .describe('TMDB ID if known (preferred for exact match)'),
-  include_watch_providers: z.boolean().default(true)
+  include_watch_providers: z
+    .boolean()
+    .default(true)
     .describe('Include watch_providers. Set false to omit the map entirely.'),
-  watch_provider_regions: z.array(z.string()).default(['US'])
-    .describe('Restrict watch_providers to these ISO country codes. Defaults to ["US"]; pass [] for all ~100 regions.'),
+  watch_provider_regions: z
+    .array(z.string())
+    .default(['US'])
+    .describe(
+      'Restrict watch_providers to these ISO country codes. Defaults to ["US"]; pass [] for all ~100 regions.'
+    ),
 });
 
 /**
@@ -78,11 +94,9 @@ export class LookupMovieTool {
           duration_ms: Date.now() - startTime,
         });
 
-        throw {
-          code: 'NOT_FOUND',
-          message: `No movie found matching "${input.title}"${input.year ? ` (${input.year})` : ''}`,
-          retryable: false,
-        };
+        throw new NotFoundError(
+          `No movie found matching "${input.title}"${input.year ? ` (${input.year})` : ''}`
+        );
       }
     }
 
@@ -96,12 +110,12 @@ export class LookupMovieTool {
         duration_ms: Date.now() - startTime,
       });
 
-      throw {
-        code: 'SOURCE_ERROR',
-        message: `Failed to retrieve movie details for TMDB ID ${tmdbId}`,
-        source: 'tmdb',
-        retryable: true,
-      };
+      throw new SourceError(
+        `Failed to retrieve movie details for TMDB ID ${tmdbId}`,
+        'SOURCE_ERROR',
+        'tmdb',
+        true
+      );
     }
 
     this.logger.info('lookup-movie', {

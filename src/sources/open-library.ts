@@ -1,3 +1,4 @@
+import { normalizeError } from '../utils/errors.js';
 import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
 import { normalizeForComparison } from '../utils/strings.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
@@ -69,9 +70,10 @@ export class OpenLibrarySource {
       return result;
     } catch (error) {
       this.logger.error('open-library', {
+        ...normalizeError(error, SOURCE),
         action: 'isbn_lookup_failed',
         isbn: cleanISBN,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
       return null;
     }
@@ -138,10 +140,11 @@ export class OpenLibrarySource {
       return result;
     } catch (error) {
       this.logger.error('open-library', {
+        ...normalizeError(error, SOURCE),
         action: 'search_failed',
         title,
         author,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
       return null;
     }

@@ -1,3 +1,4 @@
+import { normalizeError } from '../utils/errors.js';
 import * as cheerio from 'cheerio';
 import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
@@ -143,10 +144,11 @@ export class GoodreadsSource {
       return null;
     } catch (error) {
       this.logger.error('goodreads', {
+        ...normalizeError(error, SOURCE),
         action: 'search_error',
         title,
         author,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
       return null;
     }
@@ -318,9 +320,10 @@ export class GoodreadsSource {
       return result;
     } catch (error) {
       this.logger.error('goodreads', {
+        ...normalizeError(error, SOURCE),
         action: 'book_details_error',
         bookId,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
       return null;
     }
@@ -384,9 +387,10 @@ export class GoodreadsSource {
       return result;
     } catch (error) {
       this.logger.error('goodreads', {
+        ...normalizeError(error, SOURCE),
         action: 'series_error',
         seriesId,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeError(error, SOURCE).message,
       });
       return null;
     }

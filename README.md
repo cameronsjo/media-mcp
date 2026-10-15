@@ -438,3 +438,18 @@ This server implements MCP specification version 2025-11-25 with support for:
 ## License
 
 MIT
+
+## Application errors
+
+Tool failures return `isError: true` and text containing `{ "error": { "code", "message", "retryable", "source"?, "retry_after_seconds"? } }`. Failed batch items use the same error fields. `source` identifies a known upstream provider; `retry_after_seconds` is included only when available. Protocol-level JSON-RPC errors remain SDK-owned.
+
+- `NOT_FOUND`: no matching result; not retryable.
+- `VALIDATION_ERROR`: invalid tool arguments or malformed data; not retryable.
+- `AUTH_ERROR`: missing or invalid provider credentials; not retryable.
+- `RATE_LIMITED`: provider quota/backoff; retryable, optionally with a delay.
+- `TIMEOUT`: provider request timeout; retryable.
+- `SOURCE_ERROR`: other provider or unexpected execution failures; retryable unless explicitly marked otherwise.
+
+Book sources and optional enrichments retain their existing `null`/empty-result fallbacks so a failed optional provider does not discard usable metadata from another source. Caught source exceptions include the common code, message, source, and retryability fields in diagnostics. Plain exceptions and unrecognized error codes normalize to `SOURCE_ERROR`; arbitrary thrown values cannot break error reporting.
+
+TMDB movie/TV primary lookup failures retain typed timeout, authentication, rate-limit, and provider errors instead of reporting a non-retryable no-match result. A genuine 404 or empty search remains a no-result result.
