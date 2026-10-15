@@ -4,6 +4,7 @@ import { Logger } from '../../src/utils/logger.js';
 import type { BookResult } from '../../src/types/book.js';
 import type { MovieResult } from '../../src/types/movie.js';
 import type { TVResult } from '../../src/types/tv.js';
+import { parse } from 'yaml';
 
 describe('GenerateFrontmatterTool', () => {
   let tool: GenerateFrontmatterTool;
@@ -110,9 +111,7 @@ describe('GenerateFrontmatterTool', () => {
     episode_runtime: 45,
     total_seasons: 5,
     total_episodes: 62,
-    seasons: [
-      { season_number: 1, name: 'Season 1', episode_count: 7, air_date: '2008-01-20' },
-    ],
+    seasons: [{ season_number: 1, name: 'Season 1', episode_count: 7, air_date: '2008-01-20' }],
     ratings: {
       tmdb: { score: 8.9, count: 12000 },
       imdb: { score: null, id: 'tt0903747' },
@@ -137,9 +136,9 @@ describe('GenerateFrontmatterTool', () => {
       });
 
       expect(result).toContain('---');
-      expect(result).toContain('title: The Name of the Wind');
-      expect(result).toContain('author: Patrick Rothfuss');
-      expect(result).toContain('type: book');
+      expect(result).toContain('title: "The Name of the Wind"');
+      expect(result).toContain('author: "Patrick Rothfuss"');
+      expect(result).toContain('type: "book"');
       expect(result).not.toContain('page_count');
     });
 
@@ -149,13 +148,13 @@ describe('GenerateFrontmatterTool', () => {
         template: 'default',
       });
 
-      expect(result).toContain('title: The Name of the Wind');
-      expect(result).toContain('author: Patrick Rothfuss');
-      expect(result).toContain('series: The Kingkiller Chronicle');
+      expect(result).toContain('title: "The Name of the Wind"');
+      expect(result).toContain('author: "Patrick Rothfuss"');
+      expect(result).toContain('series: "The Kingkiller Chronicle"');
       expect(result).toContain('series_position: 1');
       expect(result).toContain('page_count: 662');
       expect(result).toContain('rating: 4.52');
-      expect(result).toContain('status: unread');
+      expect(result).toContain('status: "unread"');
     });
 
     it('should generate full book frontmatter', async () => {
@@ -164,8 +163,8 @@ describe('GenerateFrontmatterTool', () => {
         template: 'full',
       });
 
-      expect(result).toContain('publisher: DAW Books');
-      expect(result).toContain('publish_date: 2007');
+      expect(result).toContain('publisher: "DAW Books"');
+      expect(result).toContain('publish_date: "2007"');
       expect(result).toContain('description:');
     });
   });
@@ -177,9 +176,9 @@ describe('GenerateFrontmatterTool', () => {
         template: 'minimal',
       });
 
-      expect(result).toContain('title: Inception');
+      expect(result).toContain('title: "Inception"');
       expect(result).toContain('year: 2010');
-      expect(result).toContain('type: movie');
+      expect(result).toContain('type: "movie"');
     });
 
     it('should generate default movie frontmatter', async () => {
@@ -188,10 +187,10 @@ describe('GenerateFrontmatterTool', () => {
         template: 'default',
       });
 
-      expect(result).toContain('director: Christopher Nolan');
+      expect(result).toContain('director: "Christopher Nolan"');
       expect(result).toContain('runtime: 148');
       expect(result).toContain('rating: 8.4');
-      expect(result).toContain('status: unwatched');
+      expect(result).toContain('status: "unwatched"');
       // URLs with colons get quoted in YAML
       expect(result).toContain('imdb:');
       expect(result).toContain('https://www.imdb.com/title/tt1375666');
@@ -216,9 +215,9 @@ describe('GenerateFrontmatterTool', () => {
         template: 'minimal',
       });
 
-      expect(result).toContain('title: Breaking Bad');
+      expect(result).toContain('title: "Breaking Bad"');
       expect(result).toContain('year: 2008');
-      expect(result).toContain('type: tv');
+      expect(result).toContain('type: "tv"');
     });
 
     it('should generate default TV frontmatter', async () => {
@@ -227,7 +226,7 @@ describe('GenerateFrontmatterTool', () => {
         template: 'default',
       });
 
-      expect(result).toContain('status: Ended');
+      expect(result).toContain('status: "Ended"');
       expect(result).toContain('seasons: 5');
       expect(result).toContain('episodes: 62');
       expect(result).toContain('networks:');
@@ -246,8 +245,94 @@ describe('GenerateFrontmatterTool', () => {
         },
       });
 
-      expect(result).toContain('my_rating: high');
-      expect(result).toContain('series_name: The Kingkiller Chronicle');
+      expect(result).toContain('my_rating: "high"');
+      expect(result).toContain('series_name: "The Kingkiller Chronicle"');
+    });
+  });
+
+  describe('YAML serialization', () => {
+    it('round-trips ambiguous scalars, escaped text, multiline strings, arrays, and nested fields', async () => {
+      const edgeCaseBook: BookResult = {
+        ...mockBookResult,
+        title: 'true',
+        author: 'null',
+        genres: ['#hash', ' leading', '0', 'yes'],
+        description: 'line one\nline two\r\nline three\twith control \\ and "quotes"',
+        series: {
+          name: 'nested: value',
+          position: 0,
+          total_books: 3,
+        },
+        _meta: {
+          ...mockBookResult._meta,
+          primary_source: 'source\\with "quotes"',
+        },
+      };
+
+      const result = await tool.execute({
+        lookup_result: edgeCaseBook,
+        template: 'full',
+        custom_fields: {
+          ambiguous: 'title',
+          escaped: '_meta.primary_source',
+          multiline: 'description',
+          array_values: 'genres',
+          nested_values: 'series',
+        },
+      });
+
+      expect(result).toMatch(/^---\n[\s\S]+\n---$/);
+      const parsed = parse(result.slice(4, -3)) as Record<string, unknown>;
+      expect(parsed.title).toBe('true');
+      expect(parsed.author).toBe('null');
+      expect(parsed.ambiguous).toBe('true');
+      expect(parsed.escaped).toBe('source\\with "quotes"');
+      expect(parsed.multiline).toBe(edgeCaseBook.description);
+      expect(parsed.array_values).toEqual(edgeCaseBook.genres);
+      expect(parsed.nested_values).toEqual(edgeCaseBook.series);
+    });
+
+    it('preserves own __proto__ keys in nested and top-level custom metadata', async () => {
+      const payload = JSON.parse('{"__proto__":{"keep":"yes"},"normal":"ok"}') as unknown;
+      const result = await tool.execute({
+        lookup_result: { ...mockBookResult, payload },
+        template: 'minimal',
+        custom_fields: JSON.parse('{"__proto__":"title","payload":"payload"}') as Record<
+          string,
+          string
+        >,
+      });
+      const parsed = parse(result.slice(4, -3)) as Record<string, unknown>;
+      expect(Object.hasOwn(parsed, '__proto__')).toBe(true);
+      expect(parsed['__proto__']).toBe(mockBookResult.title);
+      expect(parsed.payload).toEqual(payload);
+      expect(Object.hasOwn(parsed.payload as object, '__proto__')).toBe(true);
+      expect(({} as Record<string, unknown>)['keep']).toBeUndefined();
+    });
+
+    it('omits undefined and null fields while retaining valid frontmatter delimiters', async () => {
+      const sparseBook: BookResult = {
+        ...mockBookResult,
+        series: { name: null, position: null, total_books: null },
+        publisher: null,
+        description: null,
+        cover_url: null,
+      };
+
+      const result = await tool.execute({
+        lookup_result: sparseBook,
+        template: 'full',
+        custom_fields: { missing: 'missing.path' },
+      });
+
+      expect(result).toMatch(/^---\n[\s\S]+\n---$/);
+      expect(result).not.toContain('undefined');
+      const parsed = parse(result.slice(4, -3)) as Record<string, unknown>;
+      expect(parsed).not.toHaveProperty('series');
+      expect(parsed).not.toHaveProperty('missing');
+      expect(parsed).not.toHaveProperty('publisher');
+      expect(parsed).not.toHaveProperty('description');
+      expect(parsed).not.toHaveProperty('cover');
     });
   });
 
