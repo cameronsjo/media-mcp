@@ -1,6 +1,16 @@
 import type http from 'node:http';
-import express, { type Express, type Request, type Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import express, { type Express, type Request, type Response, type NextFunction } from 'express';
+import {
+  toNodeHandler,
+  hostHeaderValidation,
+  localhostHostValidation,
+  originValidation,
+} from '@modelcontextprotocol/node';
+import {
+  localhostAllowedHostnames,
+  localhostAllowedOrigins,
+  type McpHttpHandler,
+} from '@modelcontextprotocol/server';
 import { Logger } from '../utils/logger.js';
 
 export interface StreamableHTTPTransportOptions {
@@ -8,45 +18,24 @@ export interface StreamableHTTPTransportOptions {
   host: string;
   basePath: string;
   logger: Logger;
-}
-
-export interface MCPRequest {
-  jsonrpc: '2.0';
-  id?: string | number;
-  method: string;
-  params?: unknown;
-}
-
-export interface MCPResponse {
-  jsonrpc: '2.0';
-  id?: string | number;
-  result?: unknown;
-  error?: {
-    code: number;
-    message: string;
-    data?: unknown;
-  };
-}
-
-type RequestHandler = (request: MCPRequest, sessionId: string) => Promise<MCPResponse>;
-
-interface Session {
-  id: string;
-  createdAt: number;
-  lastActive: number;
+  handler: McpHttpHandler;
+  allowedHosts?: string[];
+  allowedOrigins?: string[];
+  configureApp?: (app: Express) => void;
 }
 
 /**
- * Streamable HTTP Transport for MCP (2025-11-25 spec)
- * Implements single-endpoint architecture with POST/GET/DELETE support
+ * Node host for the SDK's stateless HTTP handler.
+ *
+ * The MCP SDK owns protocol framing and per-request server instances. This
+ * class retains the application's operational routes and host configuration,
+ * but deliberately has no session or SSE bookkeeping of its own.
  */
 export class StreamableHTTPTransport {
-  private app: Express;
+  private readonly app: Express;
   private server: http.Server | null = null;
-  private sessions: Map<string, Session> = new Map();
-  private requestHandler: RequestHandler | null = null;
-  private logger: Logger;
-  private options: StreamableHTTPTransportOptions;
+  private readonly logger: Logger;
+  private readonly options: StreamableHTTPTransportOptions;
 
   constructor(options: StreamableHTTPTransportOptions) {
     this.options = options;
@@ -55,12 +44,48 @@ export class StreamableHTTPTransport {
 
     this.setupMiddleware();
     this.setupRoutes();
-    this.startSessionCleanup();
+    this.options.configureApp?.(this.app);
+    // Must follow every route, including operational extensions, so Express
+    // cannot replace application errors with an HTML stack-trace response.
+    this.app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
+      this.logger.error('http-transport', {
+        action: 'handler_error',
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      if (res.headersSent) {
+        next(error);
+        return;
+      }
+      const details = typeof error === 'object' && error !== null ? error : {};
+      const parseFailed = 'type' in details && details.type === 'entity.parse.failed';
+      const tooLarge = 'type' in details && details.type === 'entity.too.large';
+      const status =
+        'status' in details &&
+        typeof details.status === 'number' &&
+        Number.isInteger(details.status) &&
+        details.status >= 400 &&
+        details.status < 500
+          ? details.status
+          : 500;
+      res.status(status).json({
+        jsonrpc: '2.0',
+        id: null,
+        error: {
+          code: parseFailed ? -32700 : status < 500 ? -32000 : -32603,
+          message: parseFailed
+            ? 'Invalid JSON body'
+            : tooLarge
+              ? 'Request body too large'
+              : status < 500
+                ? 'Invalid request body'
+                : 'Internal server error',
+        },
+      });
+    });
   }
 
   private setupMiddleware(): void {
-    this.app.use(express.json());
-
     // Request logging
     this.app.use((req, res, next) => {
       const start = Date.now();
@@ -75,11 +100,33 @@ export class StreamableHTTPTransport {
       next();
     });
 
-    // CORS for browser clients
+    // Validate before body parsing or CORS/preflight handling: rejecting only
+    // POSTs would leave browser preflight and operational routes unprotected.
+    const validateHost = this.options.allowedHosts
+      ? hostHeaderValidation([
+          ...new Set([...localhostAllowedHostnames(), ...this.options.allowedHosts]),
+        ])
+      : localhostHostValidation();
+    const validateOrigin = originValidation([
+      ...new Set([...localhostAllowedOrigins(), ...(this.options.allowedOrigins ?? [])]),
+    ]);
     this.app.use((req, res, next) => {
-      res.header('Access-Control-Allow-Origin', '*');
-      res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-      res.header('Access-Control-Allow-Headers', 'Content-Type, Mcp-Session-Id');
+      if (!validateHost(req, res) || !validateOrigin(req, res)) return;
+      next();
+    });
+
+    // Only reflect an Origin that passed the SDK allowlist above. Requests
+    // without Origin remain available to non-browser MCP clients.
+    this.app.use((req, res, next) => {
+      res.vary('Origin');
+      if (typeof req.headers.origin === 'string' && req.headers.origin) {
+        res.header('Access-Control-Allow-Origin', req.headers.origin);
+      }
+      res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.header(
+        'Access-Control-Allow-Headers',
+        'Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Mcp-Method, Mcp-Name'
+      );
       res.header('Access-Control-Expose-Headers', 'Mcp-Session-Id');
 
       if (req.method === 'OPTIONS') {
@@ -88,6 +135,8 @@ export class StreamableHTTPTransport {
       }
       next();
     });
+
+    this.app.use(express.json());
   }
 
   private setupRoutes(): void {
@@ -98,160 +147,43 @@ export class StreamableHTTPTransport {
       res.json({
         resource: `http://${this.options.host}:${this.options.port}${basePath}`,
         resource_documentation_uri: 'https://github.com/your-repo/media-metadata-mcp',
-        mcp_version: '2025-11-25',
+        mcp_version: '2026-07-28',
       });
     });
 
-    // MCP endpoint - POST for requests
-    this.app.post(basePath, async (req: Request, res: Response): Promise<void> => {
-      try {
-        // Get or create session
-        let sessionId = req.headers['mcp-session-id'] as string;
-
-        if (!sessionId) {
-          sessionId = uuidv4();
-          this.sessions.set(sessionId, {
-            id: sessionId,
-            createdAt: Date.now(),
-            lastActive: Date.now(),
-          });
-        } else {
-          const session = this.sessions.get(sessionId);
-          if (session) {
-            session.lastActive = Date.now();
-          }
-        }
-
-        res.setHeader('Mcp-Session-Id', sessionId);
-
-        if (!this.requestHandler) {
-          res.status(503).json({
-            jsonrpc: '2.0',
-            error: {
-              code: -32603,
-              message: 'Server not ready',
-            },
-          });
-          return;
-        }
-
-        const mcpRequest = req.body as MCPRequest;
-
-        // Validate JSON-RPC request
-        if (mcpRequest.jsonrpc !== '2.0' || !mcpRequest.method) {
-          res.status(400).json({
-            jsonrpc: '2.0',
-            id: mcpRequest.id,
-            error: {
-              code: -32600,
-              message: 'Invalid Request',
-            },
-          });
-          return;
-        }
-
-        const response = await this.requestHandler(mcpRequest, sessionId);
-        res.json(response);
-      } catch (error) {
+    // The SDK adapter handles JSON-RPC validation, era negotiation, response
+    // envelopes and stateless per-request Server construction.
+    const nodeHandler = toNodeHandler(this.options.handler, {
+      onerror: (error) => {
         this.logger.error('http-transport', {
           action: 'request_error',
-          error: error instanceof Error ? error.message : String(error),
+          error: error.message,
         });
-
-        res.status(500).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32603,
-            message: 'Internal error',
-          },
-        });
-      }
+      },
+    });
+    this.app.all(basePath, (req, res, next) => {
+      void nodeHandler(req, res, req.body).catch(next);
     });
 
-    // MCP endpoint - GET for SSE notifications (server-to-client)
-    this.app.get(basePath, (req: Request, res: Response): void => {
-      const sessionId = req.headers['mcp-session-id'] as string;
-
-      if (!sessionId || !this.sessions.has(sessionId)) {
-        res.status(400).json({
-          error: 'Valid Mcp-Session-Id header required',
-        });
-        return;
-      }
-
-      // Set up SSE
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.setHeader('Mcp-Session-Id', sessionId);
-
-      // Send initial ping
-      res.write('event: ping\ndata: {}\n\n');
-
-      // Keep connection alive with periodic pings
-      const pingInterval = setInterval(() => {
-        res.write('event: ping\ndata: {}\n\n');
-      }, 30000);
-
-      req.on('close', () => {
-        clearInterval(pingInterval);
-      });
-    });
-
-    // MCP endpoint - DELETE for session termination
-    this.app.delete(basePath, (req: Request, res: Response) => {
-      const sessionId = req.headers['mcp-session-id'] as string;
-
-      if (sessionId && this.sessions.has(sessionId)) {
-        this.sessions.delete(sessionId);
-        this.logger.info('http-transport', {
-          action: 'session_terminated',
-          session_id: sessionId,
-        });
-      }
-
-      res.json({ success: true });
-    });
-
-    // Health check endpoint
+    // Health remains an operational endpoint and is intentionally outside the
+    // MCP handler. Stateless serving means there are no local sessions to
+    // report, so retain the field for response compatibility with its value 0.
     this.app.get('/health', (_req, res) => {
       res.json({
         status: 'healthy',
-        sessions: this.sessions.size,
+        sessions: 0,
         timestamp: new Date().toISOString(),
       });
     });
   }
 
-  private startSessionCleanup(): void {
-    // Clean up inactive sessions every 5 minutes
-    setInterval(() => {
-      const now = Date.now();
-      const timeout = 30 * 60 * 1000; // 30 minutes
-
-      for (const [id, session] of this.sessions) {
-        if (now - session.lastActive > timeout) {
-          this.sessions.delete(id);
-          this.logger.debug('http-transport', {
-            action: 'session_expired',
-            session_id: id,
-          });
-        }
-      }
-    }, 5 * 60 * 1000);
-  }
-
-  /** Expose the Express app for registering additional operational routes (e.g. /api/widget) */
+  /** Expose the configured app; register operational routes via configureApp. */
   getApp(): Express {
     return this.app;
   }
 
-  setRequestHandler(handler: RequestHandler): void {
-    this.requestHandler = handler;
-  }
-
   async start(): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       this.server = this.app.listen(this.options.port, this.options.host, () => {
         this.logger.info('http-transport', {
           action: 'started',
@@ -261,10 +193,13 @@ export class StreamableHTTPTransport {
         });
         resolve();
       });
+      this.server.once('error', reject);
     });
   }
 
   async stop(): Promise<void> {
+    await this.options.handler.close();
+
     return new Promise((resolve) => {
       if (!this.server) {
         resolve();

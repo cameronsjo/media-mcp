@@ -142,6 +142,34 @@ TMDB_API_KEY=your-key node dist/index.js --transport http
 
 Connect your MCP client to `http://127.0.0.1:3000/mcp`
 
+HTTP requests validate Host and Origin before parsing or dispatch to mitigate
+DNS rebinding and cross-origin browser calls. These checks are not authentication
+or a remote-access boundary: non-browser clients can set Host and omit Origin.
+Use loopback binding, a firewall, or an authenticated proxy to restrict access.
+By default, only `localhost`, `127.0.0.1`, and `[::1]` are allowed; native clients may omit
+Origin. For LAN/Docker access, set `MCP_ALLOWED_HOSTS=media.internal` and, for
+browser clients, `MCP_ALLOWED_ORIGINS=ui.internal`. These comma-separated
+hostname lists extend localhost access; use hostnames only, without schemes,
+ports, paths, or wildcards. Invalid or empty configured lists fail startup.
+Binding `MCP_HTTP_HOST=0.0.0.0` exposes the listener on all interfaces; the header
+checks do not prevent remote clients from connecting with an allowed Host.
+CORS reflects only a validated Origin, and foreign-origin preflights are rejected.
+Malformed JSON returns a JSON-RPC parse error, without an HTML stack trace.
+`GET` and `DELETE /mcp` return HTTP 405; stateless requests use `POST`.
+This is a breaking migration: existing LAN clients must set `MCP_ALLOWED_HOSTS`
+to their connection hostname (and browser clients must set `MCP_ALLOWED_ORIGINS`).
+The same Host/Origin guards cover `/health` and `/api/widget`; monitoring clients
+must use localhost or an explicitly allowed hostname too. Docker Compose publishes
+only on host loopback by default. To expose it deliberately, change the published
+address to a specific LAN address and apply appropriate network/authentication controls.
+
+HTTP serving uses the MCP v2 stateless SDK: modern clients send each request
+with its protocol envelope and do not need an `initialize` handshake or
+`Mcp-Session-Id`. The same endpoint keeps the SDK's stateless legacy
+compatibility path for 2025-era clients, and stdio serves both protocol eras.
+The SDK's legacy `logging/setLevel` compatibility remains available for now;
+migrating to stderr/OpenTelemetry is a follow-up.
+
 ## Tools
 
 ### lookup_book
@@ -332,6 +360,8 @@ The server uses SQLite for caching with the following TTLs:
 
 ## Docker
 
+To expose deliberately, replace the loopback publish address with a specific LAN address and enforce network/proxy controls; media-mcp has no authentication ([cameronsjo/media-mcp#47](https://github.com/cameronsjo/media-mcp/issues/47)).
+
 ### Build
 
 ```bash
@@ -343,7 +373,7 @@ docker build -t media-metadata-mcp .
 ```bash
 docker run -d \
   --name media-mcp \
-  -p 3000:3000 \
+  -p 127.0.0.1:3000:3000 \
   -e TMDB_API_KEY=your-key \
   -v media-mcp-cache:/app/cache \
   media-metadata-mcp
@@ -356,7 +386,7 @@ services:
   media-mcp:
     build: .
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - TMDB_API_KEY=${TMDB_API_KEY}
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY}  # optional

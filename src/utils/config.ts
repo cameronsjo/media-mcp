@@ -5,6 +5,29 @@ function safeParseInt(value: string): number | undefined {
   return Number.isNaN(parsed) ? undefined : parsed;
 }
 
+// The SDK guards compare hostnames, not URLs or ports. Reject wildcard or URL
+// configuration rather than accidentally treating a broad value as permission.
+const HostnameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .refine((value) => {
+    const dnsName = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*\.?$/;
+    const ipv6 = /^\[[0-9a-f:.]+\]$/;
+    if (!dnsName.test(value) && !ipv6.test(value)) return false;
+    try {
+      const url = new URL(`http://${value}`);
+      return !url.port && !url.username && !url.password && url.pathname === '/';
+    } catch {
+      return false;
+    }
+  }, 'Expected a hostname without scheme, port, path or wildcard')
+  .transform((value) => new URL(`http://${value}`).hostname);
+
+function parseHostnameList(value: string | undefined): string[] | undefined {
+  return value === undefined ? undefined : value.split(',');
+}
+
 /**
  * Environment configuration schema with validation
  *
@@ -23,6 +46,8 @@ export const ConfigSchema = z.object({
   httpPort: z.number().default(3000),
   httpHost: z.string().default('127.0.0.1'),
   httpPath: z.string().default('/mcp'),
+  httpAllowedHosts: z.array(HostnameSchema).min(1).optional(),
+  httpAllowedOrigins: z.array(HostnameSchema).min(1).optional(),
 
   // Cache settings
   cacheEnabled: z.boolean().default(true),
@@ -79,6 +104,8 @@ export function loadConfig(): { config: Config; sources: SourceStatus[] } {
     httpPort: process.env.MCP_HTTP_PORT ? safeParseInt(process.env.MCP_HTTP_PORT) : undefined,
     httpHost: process.env.MCP_HTTP_HOST,
     httpPath: process.env.MCP_HTTP_PATH,
+    httpAllowedHosts: parseHostnameList(process.env.MCP_ALLOWED_HOSTS),
+    httpAllowedOrigins: parseHostnameList(process.env.MCP_ALLOWED_ORIGINS),
 
     // Cache settings (MCP_ prefix)
     cacheEnabled: process.env.MCP_CACHE_ENABLED !== 'false',

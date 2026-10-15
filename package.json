@@ -46,7 +46,8 @@
   },
   "homepage": "https://github.com/cameronsjo/media-mcp#readme",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/node": "2.1.1",
+    "@modelcontextprotocol/server": "2.3.1",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/exporter-metrics-otlp-http": "^0.222.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
@@ -58,16 +59,15 @@
     "cheerio": "^1.0.0",
     "express": "^4.22.3",
     "undici": "^7.30.0",
-    "uuid": "^14.0.2",
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.16.0",
+    "@modelcontextprotocol/client": "2.3.1",
     "@types/better-sqlite3": "^7.6.11",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.1",
-    "@types/uuid": "^10.0.0",
     "@vitest/coverage-v8": "^5.0.3",
     "eslint": "^9.16.0",
     "eslint-config-prettier": "^9.1.0",

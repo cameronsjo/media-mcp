@@ -1,13 +1,8 @@
 #!/usr/bin/env node
 
 import { createRequire } from 'module';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  SetLevelRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { createMcpHandler, Server } from '@modelcontextprotocol/server';
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { createToolHandlers, type ToolDefinition } from './handlers/tool-handlers.js';
 
 // Read version from package.json
@@ -53,6 +48,8 @@ const config = {
     port: appConfig.httpPort,
     host: appConfig.httpHost,
     basePath: appConfig.httpPath,
+    allowedHosts: appConfig.httpAllowedHosts,
+    allowedOrigins: appConfig.httpAllowedOrigins,
   },
   apis: {
     tmdb: {
@@ -106,6 +103,8 @@ Environment Variables:
     MCP_HTTP_PORT                 HTTP server port (default: 3000)
     MCP_HTTP_HOST                 HTTP server host (default: 127.0.0.1)
     MCP_HTTP_PATH                 HTTP endpoint path (default: /mcp)
+    MCP_ALLOWED_HOSTS             Additional allowed Host hostnames (comma-separated)
+    MCP_ALLOWED_ORIGINS           Additional allowed Origin hostnames (comma-separated)
 
   Cache:
     MCP_CACHE_ENABLED             Enable caching (default: true)
@@ -224,47 +223,57 @@ if (batchLookupTool) {
   });
 }
 
-// Create MCP server
-const server = new Server(
-  {
-    name: config.server.name,
-    version: config.server.version,
-  },
-  {
-    capabilities: {
-      tools: {},
-      logging: {},
+/**
+ * Build one low-level server for a serving unit. The SDK calls this factory
+ * once per HTTP request and once per stdio connection, which keeps HTTP
+ * stateless while retaining the existing Zod 3 tool schemas and execution
+ * path.
+ */
+function createMcpServer(emitStdioLogs: boolean): Server {
+  const server = new Server(
+    {
+      name: config.server.name,
+      version: config.server.version,
     },
-  }
-);
-
-// Set up log emitter (only for stdio transport where server is connected)
-// For HTTP transport, logs are written to stderr only
-if (config.transport === 'stdio') {
-  logger.setEmitter((entry) => {
-    server.notification({
-      method: 'notifications/message',
-      params: {
-        level: entry.level,
-        logger: entry.logger,
-        data: entry.data,
+    {
+      capabilities: {
+        tools: {},
+        logging: {},
       },
+    }
+  );
+  const handlers = createToolHandlers(tools, executeToolCall, logger);
+
+  if (emitStdioLogs) {
+    logger.setEmitter((entry) => {
+      void server
+        .notification({
+          method: 'notifications/message',
+          params: {
+            level: entry.level,
+            logger: entry.logger,
+            data: entry.data,
+          },
+        })
+        .catch(() => undefined);
     });
+  }
+
+  // Method-string registration is the v2 low-level API. It leaves tool input
+  // validation in executeToolCall, where the existing Zod 3 schemas remain
+  // authoritative, while the SDK owns wire validation and era adaptation.
+  server.setRequestHandler('tools/list', async () => handlers.listTools());
+  server.setRequestHandler('logging/setLevel', async (request) => {
+    const level = request.params.level as LogLevel;
+    return handlers.setLevel(level, true);
   });
+  server.setRequestHandler('tools/call', async (request) => {
+    const { name, arguments: args } = request.params;
+    return handlers.callTool(name, args);
+  });
+
+  return server;
 }
-
-const handlers = createToolHandlers(tools, executeToolCall, logger, config.server);
-
-// Handle list tools request
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return handlers.listTools();
-});
-
-// Handle set logging level request
-server.setRequestHandler(SetLevelRequestSchema, async (request) => {
-  const level = request.params.level as LogLevel;
-  return handlers.setLevel(level, true);
-});
 
 /**
  * Execute a tool call and record telemetry
@@ -272,7 +281,7 @@ server.setRequestHandler(SetLevelRequestSchema, async (request) => {
 async function executeToolCall(
   name: string,
   args: unknown
-): Promise<{ content: { type: string; text: string }[]; isError?: boolean }> {
+): Promise<{ content: { type: 'text'; text: string }[]; isError?: boolean }> {
   const startTime = Date.now();
   let success = true;
 
@@ -360,12 +369,6 @@ async function executeToolCall(
   }
 }
 
-// Handle tool calls
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-  return handlers.callTool(name, args);
-});
-
 // Start the server
 async function main() {
   logger.info('main', {
@@ -376,50 +379,34 @@ async function main() {
   });
 
   if (config.transport === 'http') {
-    // Start HTTP transport with full tool call support
+    const handler = createMcpHandler(() => createMcpServer(false), {
+      onerror: (error) => {
+        logger.error('main', {
+          action: 'http_error',
+          error: error.message,
+        });
+      },
+    });
     const httpTransport = new StreamableHTTPTransport({
       port: config.http.port,
       host: config.http.host,
       basePath: config.http.basePath,
+      allowedHosts: config.http.allowedHosts,
+      allowedOrigins: config.http.allowedOrigins,
       logger,
-    });
-
-    httpTransport.setRequestHandler(async (request, sessionId) => {
-      logger.debug('main', {
-        action: 'http_request',
-        method: request.method,
-        session_id: sessionId,
-      });
-
-      try {
-        return await handlers.handleHttpRequest(request);
-      } catch (error) {
-        logger.error('main', {
-          action: 'http_error',
-          method: request.method,
-          error: error instanceof Error ? error.message : String(error),
+      handler,
+      configureApp: (app) => {
+        // Register before the transport's final JSON error handler.
+        app.get('/api/widget', (_req, res) => {
+          const stats = cache.widgetStats();
+          res.json({
+            lookups_total: stats.lookups_total,
+            cache_hit_pct: stats.cache_hit_pct,
+            cache_size_bytes: stats.cache_size_bytes,
+            uptime_seconds: Math.floor(process.uptime()),
+          });
         });
-
-        return {
-          jsonrpc: '2.0' as const,
-          id: request.id,
-          error: {
-            code: -32603,
-            message: error instanceof Error ? error.message : 'Internal error',
-          },
-        };
-      }
-    });
-
-    // Homepage dashboard widget endpoint (flat JSON for customapi widget)
-    httpTransport.getApp().get('/api/widget', (_req, res) => {
-      const stats = cache.widgetStats();
-      res.json({
-        lookups_total: stats.lookups_total,
-        cache_hit_pct: stats.cache_hit_pct,
-        cache_size_bytes: stats.cache_size_bytes,
-        uptime_seconds: Math.floor(process.uptime()),
-      });
+      },
     });
 
     await httpTransport.start();
@@ -429,9 +416,14 @@ async function main() {
       `Media Metadata MCP Server running on http://${config.http.host}:${config.http.port}${config.http.basePath}`
     );
   } else {
-    // Start stdio transport
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
+    stdioHandle = serveStdio(() => createMcpServer(true), {
+      onerror: (error) => {
+        logger.error('main', {
+          action: 'stdio_error',
+          error: error.message,
+        });
+      },
+    });
 
     logger.info('main', {
       action: 'started',
@@ -441,12 +433,14 @@ async function main() {
 }
 
 let stopTransport: (() => Promise<void>) | undefined;
+let stdioHandle: { close(): Promise<void> } | undefined;
 
 // Handle shutdown
 async function shutdown() {
   logger.info('main', { action: 'shutting_down' });
   try {
     await stopTransport?.();
+    await stdioHandle?.close();
   } catch (error) {
     logger.error('main', {
       action: 'transport_stop_failed',
