@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HttpClient, Logger, RateLimiter } from '../utils/index.js';
+import { RATE_LIMITS } from '../utils/constants.js';
 import { SQLiteCache, CacheTTL } from '../cache/sqlite-cache.js';
 import { normalizeForComparison } from '../utils/strings.js';
 import type { PartialBookData, BookSource } from '../types/book.js';
@@ -82,8 +83,8 @@ export class HardcoverSource {
     this.logger = logger;
 
     rateLimiter.configure(SOURCE, {
-      requestsPerWindow: 60,
-      windowMs: 60000, // 60 requests per minute
+      requestsPerWindow: RATE_LIMITS.HARDCOVER.REQUESTS_PER_WINDOW,
+      windowMs: RATE_LIMITS.HARDCOVER.WINDOW_MS, // 60 requests per minute
     });
 
     this.client = new HttpClient(

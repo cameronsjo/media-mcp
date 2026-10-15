@@ -31,6 +31,7 @@ import {
 } from './tools/index.js';
 import { StreamableHTTPTransport } from './transport/http-transport.js';
 import { loadConfig, getSourceStatusMessage } from './utils/config.js';
+import { RATE_LIMITS, TIMING } from './utils/constants.js';
 import { initTelemetry, shutdownTelemetry, recordToolCall } from './utils/telemetry.js';
 import type { LogLevel } from './types/common.js';
 
@@ -65,7 +66,7 @@ const config = {
   cache: {
     enabled: appConfig.cacheEnabled,
     path: appConfig.cachePath,
-    defaultTTLHours: Math.floor(appConfig.cacheTtlBooks / 3600),
+    defaultTTLHours: Math.floor(appConfig.cacheTtlBooks / TIMING.SECONDS_PER_HOUR),
     cleanupIntervalMs: appConfig.cacheCleanupIntervalMs,
   } as CacheOptions,
   logging: {
@@ -73,7 +74,7 @@ const config = {
   },
   goodreads: {
     enabled: appConfig.enableGoodreadsScraping,
-    delayMs: 2000,
+    delayMs: RATE_LIMITS.GOODREADS.BASE_DELAY_MS,
   },
 };
 
