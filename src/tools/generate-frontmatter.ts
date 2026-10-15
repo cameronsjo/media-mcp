@@ -3,12 +3,17 @@ import type { BookResult } from '../types/book.js';
 import type { MovieResult } from '../types/movie.js';
 import type { TVResult } from '../types/tv.js';
 import { Logger } from '../utils/logger.js';
+import { stringify } from 'yaml';
 
 export const GenerateFrontmatterInputSchema = z.object({
   lookup_result: z.unknown().describe('Result from any lookup_* tool'),
-  template: z.enum(['default', 'minimal', 'full']).default('default')
+  template: z
+    .enum(['default', 'minimal', 'full'])
+    .default('default')
     .describe('Frontmatter template style'),
-  custom_fields: z.record(z.string(), z.string()).optional()
+  custom_fields: z
+    .record(z.string(), z.string())
+    .optional()
     .describe('Custom field mappings using JSONPath expressions'),
 });
 
@@ -36,22 +41,13 @@ export class GenerateFrontmatterTool {
 
     switch (mediaType) {
       case 'book':
-        frontmatter = this.generateBookFrontmatter(
-          result as BookResult,
-          input.template
-        );
+        frontmatter = this.generateBookFrontmatter(result as BookResult, input.template);
         break;
       case 'movie':
-        frontmatter = this.generateMovieFrontmatter(
-          result as MovieResult,
-          input.template
-        );
+        frontmatter = this.generateMovieFrontmatter(result as MovieResult, input.template);
         break;
       case 'tv':
-        frontmatter = this.generateTVFrontmatter(
-          result as TVResult,
-          input.template
-        );
+        frontmatter = this.generateTVFrontmatter(result as TVResult, input.template);
         break;
       default:
         throw {
@@ -66,7 +62,7 @@ export class GenerateFrontmatterTool {
       for (const [key, path] of Object.entries(input.custom_fields)) {
         const value = this.getValueByPath(result, path);
         if (value !== undefined) {
-          frontmatter[key] = value;
+          frontmatter = { ...frontmatter, [key]: value };
         }
       }
     }
@@ -102,10 +98,7 @@ export class GenerateFrontmatterTool {
     throw new Error('Unable to determine media type');
   }
 
-  private generateBookFrontmatter(
-    book: BookResult,
-    template: string
-  ): Record<string, unknown> {
+  private generateBookFrontmatter(book: BookResult, template: string): Record<string, unknown> {
     const minimal: Record<string, unknown> = {
       title: book.title,
       author: book.author,
@@ -154,10 +147,7 @@ export class GenerateFrontmatterTool {
     return this.removeUndefined(fullFields);
   }
 
-  private generateMovieFrontmatter(
-    movie: MovieResult,
-    template: string
-  ): Record<string, unknown> {
+  private generateMovieFrontmatter(movie: MovieResult, template: string): Record<string, unknown> {
     const minimal: Record<string, unknown> = {
       title: movie.title,
       year: movie.year,
@@ -192,15 +182,13 @@ export class GenerateFrontmatterTool {
     const usProviders = movie.watch_providers['US'];
     const fullFields: Record<string, unknown> = {
       ...defaultFields,
-      original_title: movie.original_title !== movie.title
-        ? movie.original_title
-        : undefined,
+      original_title: movie.original_title !== movie.title ? movie.original_title : undefined,
       release_date: movie.release_date || undefined,
       tagline: movie.tagline || undefined,
       description: movie.description || undefined,
       backdrop: movie.backdrop_url || undefined,
       directors: movie.directors.length > 1 ? movie.directors : undefined,
-      cast: movie.cast.slice(0, 5).map(c => `${c.name} (${c.character})`),
+      cast: movie.cast.slice(0, 5).map((c) => `${c.name} (${c.character})`),
       streaming: usProviders?.stream || undefined,
       rent: usProviders?.rent || undefined,
       buy: usProviders?.buy || undefined,
@@ -213,14 +201,9 @@ export class GenerateFrontmatterTool {
     return this.removeUndefined(fullFields);
   }
 
-  private generateTVFrontmatter(
-    tv: TVResult,
-    template: string
-  ): Record<string, unknown> {
+  private generateTVFrontmatter(tv: TVResult, template: string): Record<string, unknown> {
     const parsedDate = tv.first_air_date ? new Date(tv.first_air_date) : null;
-    const year = parsedDate && !isNaN(parsedDate.getTime())
-      ? parsedDate.getFullYear()
-      : undefined;
+    const year = parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate.getFullYear() : undefined;
 
     const minimal: Record<string, unknown> = {
       title: tv.title,
@@ -241,9 +224,7 @@ export class GenerateFrontmatterTool {
       rating: tv.ratings.tmdb?.score || undefined,
       poster: tv.poster_url || undefined,
       networks: tv.networks.length > 0 ? tv.networks : undefined,
-      imdb: tv.identifiers.imdb
-        ? `https://www.imdb.com/title/${tv.identifiers.imdb}`
-        : undefined,
+      imdb: tv.identifiers.imdb ? `https://www.imdb.com/title/${tv.identifiers.imdb}` : undefined,
       watch_status: 'unwatched',
       date_added: new Date().toISOString().split('T')[0],
     };
@@ -255,9 +236,7 @@ export class GenerateFrontmatterTool {
     // Full template
     const fullFields: Record<string, unknown> = {
       ...defaultFields,
-      original_title: tv.original_title !== tv.title
-        ? tv.original_title
-        : undefined,
+      original_title: tv.original_title !== tv.title ? tv.original_title : undefined,
       first_air_date: tv.first_air_date || undefined,
       last_air_date: tv.last_air_date || undefined,
       tagline: tv.tagline || undefined,
@@ -277,10 +256,12 @@ export class GenerateFrontmatterTool {
 
   private getBestRating(ratings: BookResult['ratings']): number | undefined {
     // Prefer Goodreads, then Open Library, then Google Books
-    return ratings.goodreads?.score
-      || ratings.open_library?.score
-      || ratings.google_books?.score
-      || undefined;
+    return (
+      ratings.goodreads?.score ||
+      ratings.open_library?.score ||
+      ratings.google_books?.score ||
+      undefined
+    );
   }
 
   private getValueByPath(obj: unknown, path: string): unknown {
@@ -297,68 +278,46 @@ export class GenerateFrontmatterTool {
   }
 
   private removeUndefined(obj: Record<string, unknown>): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
+    const result = Object.create(null) as Record<string, unknown>;
 
     for (const [key, value] of Object.entries(obj)) {
-      if (value !== undefined) {
-        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-          const nested = this.removeUndefined(value as Record<string, unknown>);
-          if (Object.keys(nested).length > 0) {
-            result[key] = nested;
-          }
-        } else {
-          result[key] = value;
+      if (value === null || value === undefined) continue;
+
+      if (Array.isArray(value)) {
+        const items = value
+          .filter((item) => item !== undefined)
+          .map((item) => {
+            if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+              const nested = this.removeUndefined(item as Record<string, unknown>);
+              return Object.keys(nested).length > 0 ? nested : undefined;
+            }
+            return item;
+          })
+          .filter((item) => item !== undefined);
+
+        // The previous serializer omitted empty arrays. Preserve that output
+        // while cleaning nested object values for the YAML library.
+        if (items.length > 0) {
+          result[key] = items;
         }
+      } else if (typeof value === 'object') {
+        const nested = this.removeUndefined(value as Record<string, unknown>);
+        if (Object.keys(nested).length > 0) {
+          result[key] = nested;
+        }
+      } else {
+        result[key] = value;
       }
     }
 
     return result;
   }
 
-  private toYAML(obj: Record<string, unknown>, indent: number = 0): string {
-    const lines: string[] = [];
-    const prefix = '  '.repeat(indent);
-
-    for (const [key, value] of Object.entries(obj)) {
-      if (value === null || value === undefined) continue;
-
-      if (Array.isArray(value)) {
-        if (value.length === 0) continue;
-        lines.push(`${prefix}${key}:`);
-        for (const item of value) {
-          if (typeof item === 'object' && item !== null) {
-            lines.push(`${prefix}  - ${this.toYAML(item as Record<string, unknown>, indent + 2).trim()}`);
-          } else {
-            lines.push(`${prefix}  - ${this.formatValue(item)}`);
-          }
-        }
-      } else if (typeof value === 'object') {
-        lines.push(`${prefix}${key}:`);
-        lines.push(this.toYAML(value as Record<string, unknown>, indent + 1));
-      } else {
-        lines.push(`${prefix}${key}: ${this.formatValue(value)}`);
-      }
-    }
-
-    return lines.join('\n');
-  }
-
-  private formatValue(value: unknown): string {
-    if (typeof value === 'string') {
-      // Quote strings that need it
-      if (
-        value.includes(':') ||
-        value.includes('#') ||
-        value.includes("'") ||
-        value.includes('"') ||
-        value.includes('\n') ||
-        value.startsWith(' ') ||
-        value.endsWith(' ')
-      ) {
-        return `"${value.replace(/"/g, '\\"')}"`;
-      }
-      return value;
-    }
-    return String(value);
+  private toYAML(obj: Record<string, unknown>): string {
+    return stringify(this.removeUndefined(obj), {
+      lineWidth: 0,
+      defaultKeyType: 'PLAIN',
+      defaultStringType: 'QUOTE_DOUBLE',
+    });
   }
 }

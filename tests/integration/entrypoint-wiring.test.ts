@@ -232,7 +232,7 @@ describe('entrypoint production wiring', () => {
         },
       })) as { content: Array<{ text: string }>; isError?: boolean };
       expect(frontmatter.isError).not.toBe(true);
-      expect(frontmatter.content[0].text).toContain('title: Wiring Test');
+      expect(frontmatter.content[0].text).toContain('title: "Wiring Test"');
 
       expect(await setLoggingLevel({ params: { level: 'debug' } })).toEqual({});
       expect(setLevel.mock.calls.at(-1)).toEqual(['debug']);
@@ -353,7 +353,7 @@ describe('entrypoint production wiring', () => {
       expect(called.payload.result?.content).toEqual([
         expect.objectContaining({
           type: 'text',
-          text: expect.stringContaining('title: HTTP Wiring'),
+          text: expect.stringContaining('title: "HTTP Wiring"'),
         }),
       ]);
 
