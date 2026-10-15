@@ -4,6 +4,7 @@ import type { BookResult } from '../types/book.js';
 import type { MovieResult } from '../types/movie.js';
 import type { TVResult } from '../types/tv.js';
 import { Logger } from '../utils/logger.js';
+import { stringify } from 'yaml';
 
 export const GenerateFrontmatterInputSchema = z.object({
   lookup_result: z.unknown().describe('Result from any lookup_* tool'),
@@ -61,7 +62,7 @@ export class GenerateFrontmatterTool {
       for (const [key, path] of Object.entries(input.custom_fields)) {
         const value = this.getValueByPath(result, path);
         if (value !== undefined) {
-          frontmatter[key] = value;
+          frontmatter = { ...frontmatter, [key]: value };
         }
       }
     }
@@ -277,70 +278,46 @@ export class GenerateFrontmatterTool {
   }
 
   private removeUndefined(obj: Record<string, unknown>): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
+    const result = Object.create(null) as Record<string, unknown>;
 
     for (const [key, value] of Object.entries(obj)) {
-      if (value !== undefined) {
-        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-          const nested = this.removeUndefined(value as Record<string, unknown>);
-          if (Object.keys(nested).length > 0) {
-            result[key] = nested;
-          }
-        } else {
-          result[key] = value;
+      if (value === null || value === undefined) continue;
+
+      if (Array.isArray(value)) {
+        const items = value
+          .filter((item) => item !== undefined)
+          .map((item) => {
+            if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+              const nested = this.removeUndefined(item as Record<string, unknown>);
+              return Object.keys(nested).length > 0 ? nested : undefined;
+            }
+            return item;
+          })
+          .filter((item) => item !== undefined);
+
+        // The previous serializer omitted empty arrays. Preserve that output
+        // while cleaning nested object values for the YAML library.
+        if (items.length > 0) {
+          result[key] = items;
         }
+      } else if (typeof value === 'object') {
+        const nested = this.removeUndefined(value as Record<string, unknown>);
+        if (Object.keys(nested).length > 0) {
+          result[key] = nested;
+        }
+      } else {
+        result[key] = value;
       }
     }
 
     return result;
   }
 
-  private toYAML(obj: Record<string, unknown>, indent: number = 0): string {
-    const lines: string[] = [];
-    const prefix = '  '.repeat(indent);
-
-    for (const [key, value] of Object.entries(obj)) {
-      if (value === null || value === undefined) continue;
-
-      if (Array.isArray(value)) {
-        if (value.length === 0) continue;
-        lines.push(`${prefix}${key}:`);
-        for (const item of value) {
-          if (typeof item === 'object' && item !== null) {
-            lines.push(
-              `${prefix}  - ${this.toYAML(item as Record<string, unknown>, indent + 2).trim()}`
-            );
-          } else {
-            lines.push(`${prefix}  - ${this.formatValue(item)}`);
-          }
-        }
-      } else if (typeof value === 'object') {
-        lines.push(`${prefix}${key}:`);
-        lines.push(this.toYAML(value as Record<string, unknown>, indent + 1));
-      } else {
-        lines.push(`${prefix}${key}: ${this.formatValue(value)}`);
-      }
-    }
-
-    return lines.join('\n');
-  }
-
-  private formatValue(value: unknown): string {
-    if (typeof value === 'string') {
-      // Quote strings that need it
-      if (
-        value.includes(':') ||
-        value.includes('#') ||
-        value.includes("'") ||
-        value.includes('"') ||
-        value.includes('\n') ||
-        value.startsWith(' ') ||
-        value.endsWith(' ')
-      ) {
-        return `"${value.replace(/"/g, '\\"')}"`;
-      }
-      return value;
-    }
-    return String(value);
+  private toYAML(obj: Record<string, unknown>): string {
+    return stringify(this.removeUndefined(obj), {
+      lineWidth: 0,
+      defaultKeyType: 'PLAIN',
+      defaultStringType: 'QUOTE_DOUBLE',
+    });
   }
 }

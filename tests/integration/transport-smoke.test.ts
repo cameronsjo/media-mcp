@@ -377,7 +377,7 @@ describe('built transport smoke test', () => {
         expect(frontmatter.isError).not.toBe(true);
         expect(frontmatter.content[0]).toMatchObject({
           type: 'text',
-          text: expect.stringContaining('title: Smoke Test'),
+          text: expect.stringContaining('title: "Smoke Test"'),
         });
       } finally {
         await withTimeout(modernClient.close(), remaining(deadline), 'modern HTTP close');
