@@ -51,13 +51,17 @@ export function assertHttpAuthPolicy(policy: HttpAuthPolicy): void {
   );
 }
 
-/** Express middleware rejecting requests without the configured bearer token. */
-export function requireBearerToken(token: string) {
+/**
+ * Express middleware rejecting requests without the configured bearer token.
+ * `onReject` records the refusal; it never receives the header value.
+ */
+export function requireBearerToken(token: string, onReject: (req: Request) => void) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (bearerTokenMatches(req.headers.authorization, token)) {
       next();
       return;
     }
+    onReject(req);
     res
       .status(401)
       .set('WWW-Authenticate', 'Bearer')

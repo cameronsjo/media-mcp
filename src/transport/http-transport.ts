@@ -156,9 +156,21 @@ export class StreamableHTTPTransport {
     // Runs before body parsing, so unauthenticated bodies are never parsed.
     const authToken = this.options.authToken;
     if (authToken) {
-      const requireToken = requireBearerToken(authToken);
+      const requireToken = requireBearerToken(authToken, (req) => {
+        this.logger.warning('http-transport', {
+          action: 'auth_rejected',
+          method: req.method,
+          path: req.path,
+          remote: req.socket.remoteAddress,
+          reason: req.headers.authorization ? 'token mismatch' : 'missing bearer token',
+        });
+      });
+      // Never exempt /health when the MCP endpoint itself is served there.
+      const healthExempt = this.options.basePath.toLowerCase().replace(/\/+$/, '') !== '/health';
       this.app.use((req, res, next) => {
-        if ((req.method === 'GET' || req.method === 'HEAD') && req.path === '/health') {
+        const healthCheck =
+          (req.method === 'GET' || req.method === 'HEAD') && req.path === '/health';
+        if (healthExempt && healthCheck) {
           next();
           return;
         }

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- **Breaking:** the HTTP server now supports bearer-token authentication with `MCP_AUTH_TOKEN` on every route except `/health`, compared in constant time. It refuses to start on a non-loopback host without a token unless `MCP_ALLOW_UNAUTHENTICATED=1` is set. The Docker image listens on `0.0.0.0` inside the container, so Docker deployments must set `MCP_AUTH_TOKEN` and configure clients to send it ([#47](https://github.com/cameronsjo/media-mcp/issues/47)).
+- **Breaking:** the HTTP server now supports bearer-token authentication with `MCP_AUTH_TOKEN` on every route except `GET`/`HEAD /health` (exact path) and CORS preflight, compared in constant time. It refuses to start on a non-loopback host without a token unless `MCP_ALLOW_UNAUTHENTICATED=1` is set. The Docker image listens on `0.0.0.0` inside the container, so Docker deployments must set `MCP_AUTH_TOKEN` and configure clients to send it ([#47](https://github.com/cameronsjo/media-mcp/issues/47)).
 - Removed the `/.well-known/oauth-protected-resource` metadata route, which described OAuth support the server does not have.
 
 ### Fixed

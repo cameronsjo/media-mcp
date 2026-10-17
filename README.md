@@ -142,13 +142,14 @@ Or:
 TMDB_API_KEY=your-key node dist/index.js --transport http
 ```
 
-Connect your MCP client to `http://127.0.0.1:3000/mcp`
+Connect your MCP client to `http://127.0.0.1:3000/mcp`. When `MCP_AUTH_TOKEN` is set, configure the
+client to send `Authorization: Bearer <token>` with each request.
 
 ### Authentication
 
 Set `MCP_AUTH_TOKEN` and clients must send `Authorization: Bearer <token>` on
-`/mcp`, `/api/*`, and every other route except `GET`/`HEAD /health`, which
-reports only liveness. A missing or wrong token gets HTTP 401. The comparison
+`/mcp`, `/api/*`, and every other route except CORS preflight and `GET`/`HEAD
+/health` (that exact path), which reports only liveness. A missing or wrong token gets HTTP 401. The comparison
 runs in constant time. Generate a token with `openssl rand -hex 32` and keep it
 in a gitignored `.env` file or a secret store, never in a committed file.
 
@@ -172,14 +173,16 @@ browser clients, `MCP_ALLOWED_ORIGINS=ui.internal`. These comma-separated
 hostname lists extend localhost access; use hostnames only, without schemes,
 ports, paths, or wildcards. Invalid or empty configured lists fail startup.
 Binding `MCP_HTTP_HOST=0.0.0.0` exposes the listener on all interfaces; the header
-checks do not prevent remote clients from connecting with an allowed Host.
+checks do not prevent remote clients from connecting with an allowed Host, so
+the server refuses to start there without `MCP_AUTH_TOKEN` (see Authentication).
 CORS reflects only a validated Origin, and foreign-origin preflights are rejected.
 Malformed JSON returns a JSON-RPC parse error, without an HTML stack trace.
 `GET` and `DELETE /mcp` return HTTP 405; stateless requests use `POST`.
 This is a breaking migration: existing LAN clients must set `MCP_ALLOWED_HOSTS`
 to their connection hostname (and browser clients must set `MCP_ALLOWED_ORIGINS`).
 The same Host/Origin guards cover `/health` and `/api/widget`; monitoring clients
-must use localhost or an explicitly allowed hostname too. Docker Compose publishes
+must use localhost or an explicitly allowed hostname too. `/api/widget` also
+needs the bearer token when `MCP_AUTH_TOKEN` is set; `/health` does not. Docker Compose publishes
 only on host loopback by default. To expose it deliberately, change the published
 address to a specific LAN address; `MCP_AUTH_TOKEN` is required either way.
 

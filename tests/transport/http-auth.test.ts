@@ -146,9 +146,21 @@ describe('bearer-token authentication', () => {
   it('protects path variants Express routes to the same handler', async () => {
     const host = await startHost();
     try {
-      for (const path of ['/MCP', '/mcp/', '/Api/widget', '/api/widget/']) {
-        const response = await listTools(host.base, {}, path);
-        expect(response.status, path).toBe(401);
+      const authorization = `Bearer ${TOKEN}`;
+      // Each variant reaches the real handler with the token, so the 401
+      // without it comes from the guard, not from an unknown route.
+      for (const path of ['/MCP', '/mcp/']) {
+        expect((await listTools(host.base, {}, path)).status, path).toBe(401);
+        expect((await listTools(host.base, { authorization }, path)).status, path).toBe(200);
+      }
+      for (const path of ['/Api/widget', '/api/widget/']) {
+        const url = new URL(path, host.base);
+        expect((await fetch(url)).status, path).toBe(401);
+        expect((await fetch(url, { headers: { authorization } })).status, path).toBe(200);
+      }
+      // The /health exemption is an exact match; other spellings need the token.
+      for (const path of ['/Health', '/health/']) {
+        expect((await fetch(new URL(path, host.base))).status, path).toBe(401);
       }
     } finally {
       await host.close();
@@ -175,6 +187,10 @@ describe('bearer-token authentication', () => {
       const health = await fetch(new URL('/health', host.base));
       expect(health.status).toBe(200);
       expect(Object.keys(await health.json()).sort()).toEqual(['sessions', 'status', 'timestamp']);
+      // The Docker health check (`wget --spider`) sends HEAD.
+      expect((await fetch(new URL('/health', host.base), { method: 'HEAD' })).status).toBe(200);
+      const postHealth = await fetch(new URL('/health', host.base), { method: 'POST' });
+      expect(postHealth.status).toBe(401);
       const preflight = await fetch(new URL('/mcp', host.base), {
         method: 'OPTIONS',
         headers: { Origin: 'http://localhost:4173', 'Access-Control-Request-Method': 'POST' },
@@ -183,6 +199,51 @@ describe('bearer-token authentication', () => {
       expect(preflight.headers.get('access-control-allow-headers')).toContain('Authorization');
     } finally {
       await host.close();
+    }
+  });
+
+  it('logs each rejection without the presented token', async () => {
+    const warning = vi.spyOn(Logger.prototype, 'warning');
+    const host = await startHost();
+    try {
+      const presented = `Bearer ${TOKEN.slice(0, -1)}x`;
+      await listTools(host.base, { authorization: presented });
+      await listTools(host.base);
+      const rejections = warning.mock.calls.filter(([, data]) => data.action === 'auth_rejected');
+      expect(rejections.map(([, data]) => data.reason)).toEqual([
+        'token mismatch',
+        'missing bearer token',
+      ]);
+      expect(rejections[0]?.[1]).toMatchObject({ method: 'POST', path: '/mcp' });
+      expect(JSON.stringify(rejections)).not.toContain(TOKEN.slice(0, 16));
+    } finally {
+      warning.mockRestore();
+      await host.close();
+    }
+  });
+
+  it('does not exempt /health when the MCP endpoint is served there', async () => {
+    const logger = new Logger('auth-test');
+    logger.setLevel('error');
+    const transport = new StreamableHTTPTransport({
+      port: 0,
+      host: '127.0.0.1',
+      basePath: '/health',
+      logger,
+      handler: createHandler(),
+      authToken: TOKEN,
+    });
+    const { createServer } = await import('node:http');
+    const listener = createServer(transport.getApp());
+    await new Promise<void>((resolve) => listener.listen(0, '127.0.0.1', resolve));
+    try {
+      const address = listener.address();
+      if (!address || typeof address === 'string') throw new Error('No listener address');
+      const health = await fetch(`http://127.0.0.1:${address.port}/health`);
+      expect(health.status).toBe(401);
+    } finally {
+      await transport.stop();
+      await new Promise<void>((resolve) => listener.close(() => resolve()));
     }
   });
 
