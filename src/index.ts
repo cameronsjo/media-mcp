@@ -52,6 +52,8 @@ const config = {
     basePath: appConfig.httpPath,
     allowedHosts: appConfig.httpAllowedHosts,
     allowedOrigins: appConfig.httpAllowedOrigins,
+    authToken: appConfig.httpAuthToken,
+    allowUnauthenticated: appConfig.httpAllowUnauthenticated,
   },
   apis: {
     tmdb: {
@@ -107,6 +109,8 @@ Environment Variables:
     MCP_HTTP_PATH                 HTTP endpoint path (default: /mcp)
     MCP_ALLOWED_HOSTS             Additional allowed Host hostnames (comma-separated)
     MCP_ALLOWED_ORIGINS           Additional allowed Origin hostnames (comma-separated)
+    MCP_AUTH_TOKEN                Bearer token required on HTTP routes except /health
+    MCP_ALLOW_UNAUTHENTICATED     Set to 1 to listen beyond loopback without a token
 
   Cache:
     MCP_CACHE_ENABLED             Enable caching (default: true)
@@ -405,6 +409,8 @@ async function main() {
       basePath: config.http.basePath,
       allowedHosts: config.http.allowedHosts,
       allowedOrigins: config.http.allowedOrigins,
+      authToken: config.http.authToken,
+      allowUnauthenticated: config.http.allowUnauthenticated,
       logger,
       handler,
       configureApp: (app) => {

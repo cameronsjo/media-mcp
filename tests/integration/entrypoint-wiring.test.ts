@@ -27,6 +27,8 @@ const controlledEnvKeys = [
   'MCP_HTTP_PATH',
   'MCP_ALLOWED_HOSTS',
   'MCP_ALLOWED_ORIGINS',
+  'MCP_AUTH_TOKEN',
+  'MCP_ALLOW_UNAUTHENTICATED',
   'MCP_CACHE_ENABLED',
   'MCP_CACHE_PATH',
   'MCP_CACHE_TTL_BOOKS',
@@ -48,6 +50,8 @@ type JsonObject = Record<string, unknown>;
 type RpcPayload = { result?: JsonObject; error?: JsonObject };
 type RequestHandler = (request: unknown) => unknown | Promise<unknown>;
 type EventListener = (...args: never[]) => unknown;
+
+const HTTP_AUTH_TOKEN = 'entrypoint-wiring-token-0123456789abcdef';
 
 function setEnvironment(values: Record<string, string>): () => void {
   const previous = new Map<string, string | undefined>();
@@ -136,6 +140,7 @@ async function postRpc(
     signal: AbortSignal.timeout(5000),
     method: 'POST',
     headers: {
+      authorization: `Bearer ${HTTP_AUTH_TOKEN}`,
       accept: 'application/json, text/event-stream',
       'content-type': 'application/json',
     },
@@ -306,6 +311,7 @@ describe('entrypoint production wiring', () => {
       MCP_HTTP_PORT: String(port),
       MCP_HTTP_HOST: '127.0.0.1',
       MCP_HTTP_PATH: '/mcp',
+      MCP_AUTH_TOKEN: HTTP_AUTH_TOKEN,
       MCP_CACHE_PATH: ':memory:',
       MCP_ENABLE_GOODREADS_SCRAPING: 'false',
       MCP_LOG_LEVEL: 'error',
@@ -325,8 +331,15 @@ describe('entrypoint production wiring', () => {
       const baseUrl = `http://127.0.0.1:${port}`;
       await waitForHttp(baseUrl);
 
+      const unauthenticated = await fetch(`${baseUrl}/api/widget`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      await unauthenticated.arrayBuffer();
+      expect(unauthenticated.status).toBe(401);
+
       const initialWidget = await fetch(`${baseUrl}/api/widget`, {
         signal: AbortSignal.timeout(5000),
+        headers: { authorization: `Bearer ${HTTP_AUTH_TOKEN}` },
       });
       const initialWidgetBody = await initialWidget.text();
       expect(initialWidget.status).toBe(200);
@@ -339,7 +352,10 @@ describe('entrypoint production wiring', () => {
       expect(cache.get('wiring-entry-two')?.value).toEqual({ title: 'Two' });
 
       const widget = await (
-        await fetch(`${baseUrl}/api/widget`, { signal: AbortSignal.timeout(5000) })
+        await fetch(`${baseUrl}/api/widget`, {
+          signal: AbortSignal.timeout(5000),
+          headers: { authorization: `Bearer ${HTTP_AUTH_TOKEN}` },
+        })
       ).json();
       expect(widget).toMatchObject({
         lookups_total: 4,
