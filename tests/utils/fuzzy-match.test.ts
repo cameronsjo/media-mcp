@@ -149,7 +149,7 @@ describe('extractSeriesFromTitle', () => {
   });
 
   it.each(goodreadsTitleCorpus)('matches Goodreads fixture $id', (fixture) => {
-    expect(fixture.sourceUrl).toMatch(/^https:\/\/www\.goodreads\.com\//);
+    expect(fixture.sourceUrl).toMatch(/^https:\/\/www\.goodreads\.com\/book\/show\/\d+$/);
     expect(extractSeriesFromTitle(fixture.title)).toEqual(fixture.expected);
   });
 
@@ -297,9 +297,41 @@ describe('extractSeriesFromTitle', () => {
     ['x: ' + '\u00a0'.repeat(490) + '!'],
   ])('keeps whitespace-run titles at the cap fast', (title) => {
     const started = Date.now();
-    extractSeriesFromTitle(title);
+    const result = extractSeriesFromTitle(title);
     expect(Date.now() - started).toBeLessThan(1000);
+    expect(result).toEqual({ cleanTitle: title, seriesName: null, seriesPosition: null });
   });
+
+  it.each([
+    'Foo: Part 1 of 2 Series',
+    'Foo: Part 1 of 2 Volume Series',
+    'Hamlet: Part 1 of 3 of the Complete Works Series',
+    'Foo: Part 1 of Two-Disc Series',
+    'Foo: Part 1 of the 2 Volume Series',
+    'Foo - Series Series Book 1',
+  ])('does not read a part count or repeated Series as a series name: %s', (title) => {
+    expect(extractSeriesFromTitle(title)).toEqual({
+      cleanTitle: title,
+      seriesName: null,
+      seriesPosition: null,
+    });
+  });
+
+  it('strips "the" after "of" in the Part rule but keeps it in the dash rule', () => {
+    expect(extractSeriesFromTitle('Foo: Part 2 of the Hawthorn Series').seriesName).toBe(
+      'Hawthorn Series'
+    );
+    expect(extractSeriesFromTitle('Foo - the Hawthorn Series Book 2').seriesName).toBe(
+      'the Hawthorn Series'
+    );
+  });
+
+  it.each(['Title (Series, #1)', 'Title (The Series Book 1)', 'Title (Series Series #2)'])(
+    'does not read a bare Series as a name in a parenthetical format: %s',
+    (title) => {
+      expect(extractSeriesFromTitle(title).seriesName).toBeNull();
+    }
+  );
 
   it('parses a title at the length cap and leaves one past it untouched', () => {
     const suffix = ' (Series Name, #2)';

@@ -149,7 +149,7 @@ export function bookMatchScore(
  * A series name that is only a grammatical tail: "the Series", "a Series",
  * or a phrase ending "in a Series" / "Series of". It names no series.
  */
-const UNNAMED_SERIES = /^(?:(?:a|an|the)\s+)?series$|\b(?:a|an|the|of|in)\s+series$/i;
+const UNNAMED_SERIES = /^(?:(?:a|an|the)\s+)?series(?:\s+series)*$|\b(?:a|an|the|of|in)\s+series$/i;
 
 /**
  * Titles come from remote sources. Each pattern pairs a lazy group with `\s*`
@@ -192,8 +192,10 @@ export function extractSeriesFromTitle(title: string): {
     /^(?<title>.+?)\s+-\s+(?<series>[^:()]+?\s+Series),?\s+Book\s+(?<position>\d+(?:\.\d+)?)$/i,
     // "Title, Book 1"
     /^(?<title>.+?),\s*Book\s+(?<position>\d+(?:\.\d+)?)$/i,
-    // "Title: Part 1 of the Name Series" (or after a comma)
-    /^(?<title>.+?)\s*[:,]\s+Part\s+(?<position>\d+)\s+of\s+(?:the\s+)?(?<series>.+?\s+Series)$/i,
+    // "Title: Part 1 of the Name Series" (or after a comma). The name may not open with a
+    // count ("Part 1 of 2 Series", "of Two-Disc Series"); "the" is dropped as part of "of the",
+    // whereas the dash rule keeps it, as the parenthetical rules do.
+    /^(?<title>.+?)\s*[:,]\s+Part\s+(?<position>\d+)\s+of\s+(?!(?:the\s+)?(?:\d|(?:one|two|three|four|five|six|seven|eight|nine|ten|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b))(?:the\s+)?(?<series>.+?\s+Series)$/i,
   ];
 
   if (title.length > MAX_PARSED_TITLE_LENGTH) {

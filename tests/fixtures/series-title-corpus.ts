@@ -302,7 +302,7 @@ export const openLibraryFormatCorpus: readonly SeriesTitleFixture[] = [
 const gr = (
   id: string,
   title: string,
-  query: string,
+  bookId: string,
   cleanTitle: string,
   seriesName: string | null,
   seriesPosition: number | null
@@ -310,29 +310,23 @@ const gr = (
   id,
   title,
   expected: { cleanTitle, seriesName, seriesPosition },
-  sourceUrl: `https://www.goodreads.com/search?q=${encodeURIComponent(query).replace(/%20/g, '+')}`,
-  sourceNote: `Goodreads search-result title for q=${JSON.stringify(query)}, fetched 2026-10-17, is exactly ${JSON.stringify(title)}.`,
+  sourceUrl: `https://www.goodreads.com/book/show/${bookId}`,
+  sourceNote: `Goodreads record ${bookId} page title (og:title) is exactly ${JSON.stringify(title)}, checked 2026-10-17.`,
 });
 
 /**
  * Titles as the Goodreads source returns them (series sits in a trailing
- * parenthetical). Google Books, Hardcover, and TMDB are not represented: Google
+ * parenthetical). Each row cites its Goodreads book id; the record page title
+ * (og:title, which Goodreads truncates to 50 characters) matches the string. Google Books, Hardcover, and TMDB are not represented: Google
  * Books answered 429 without a key and the other two need credentials. TMDB
  * titles never reach this parser (lookup-book only parses book results).
  */
 export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
-  gr(
-    'gr-holes-series-book',
-    'Holes (Holes Series Book 1)',
-    'Series Book 1',
-    'Holes',
-    'Holes Series',
-    1
-  ),
+  gr('gr-holes-series-book', 'Holes (Holes Series Book 1)', '50000443', 'Holes', 'Holes Series', 1),
   gr(
     'gr-dopamine-detox-long-subtitle',
     'Dopamine Detox : A Short Guide to Remove Distractions and Train Your Brain to Do Hard Things (Productivity Series Book 1)',
-    'Series Book 1',
+    '58503121',
     'Dopamine Detox : A Short Guide to Remove Distractions and Train Your Brain to Do Hard Things',
     'Productivity Series',
     1
@@ -340,7 +334,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-case-of-the-hobbit-heist',
     'Case of the Hobbit Heist (Corgi Case Files Book 19)',
-    'Hobbit Book 1',
+    '204420093',
     'Case of the Hobbit Heist',
     'Corgi Case Files',
     19
@@ -348,7 +342,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-the-plot-comma-hash',
     'The Plot (The Book Series, #1)',
-    'Series Book 1',
+    '55315487',
     'The Plot',
     'The Book Series',
     1
@@ -356,7 +350,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-bad-beginning-comma-hash',
     'The Bad Beginning (A Series of Unfortunate Events, #1)',
-    'A Series of Unfortunate Events',
+    '78411',
     'The Bad Beginning',
     'A Series of Unfortunate Events',
     1
@@ -364,7 +358,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-beatrice-letters-decimal',
     'The Beatrice Letters (A Series of Unfortunate Events, #12.5)',
-    'A Series of Unfortunate Events',
+    '74720',
     'The Beatrice Letters',
     'A Series of Unfortunate Events',
     12.5
@@ -372,7 +366,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-wrinkle-in-time',
     'A Wrinkle in Time (Time Series, #1)',
-    'Time Series',
+    '895953',
     'A Wrinkle in Time',
     'Time Series',
     1
@@ -380,7 +374,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-hammer-time-series-hash',
     'Hammer Time (Chequered Flag Series #1)',
-    'Time Series',
+    '200803945',
     'Hammer Time',
     'Chequered Flag Series',
     1
@@ -388,7 +382,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-harry-potter-comma-book',
     "Harry Potter and the Sorcerer's Stone (Harry Potter, Book 1)",
-    'Harry Potter Book 1',
+    '258070452',
     "Harry Potter and the Sorcerer's Stone",
     'Harry Potter',
     1
@@ -396,7 +390,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-hobbit-graphic-novel-book-3',
     'The Hobbit: or There and Back Again (Graphic Novel, Book 3)',
-    'or There and Back Again',
+    '74378',
     'The Hobbit: or There and Back Again',
     'Graphic Novel',
     3
@@ -404,7 +398,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-by-sin-i-rise-part-one',
     'By Sin I Rise: Part One (Sins of the Fathers, #1)',
-    'Part 1 of',
+    '57605673',
     'By Sin I Rise: Part One',
     'Sins of the Fathers',
     1
@@ -412,7 +406,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-korra-part-one',
     'The Legend of Korra: Turf Wars, Part One (The Legend of Korra: Turf Wars, #1)',
-    'Part 1 of',
+    '33161035',
     'The Legend of Korra: Turf Wars, Part One',
     'The Legend of Korra: Turf Wars',
     1
@@ -420,7 +414,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-part-of-your-world',
     'Part of Your World (Part of Your World, #1)',
-    'Part 1 of',
+    '58684524',
     'Part of Your World',
     'Part of Your World',
     1
@@ -428,7 +422,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-fourth-wing-dramatized',
     'Fourth Wing (Part 1 of 2) [Dramatized Adaptation] (The Empyrean, #1)',
-    'Part 1 of',
+    '199149897',
     'Fourth Wing (Part 1 of 2) [Dramatized Adaptation]',
     'The Empyrean',
     1
@@ -436,7 +430,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-court-mist-fury-dramatized',
     'A Court of Mist and Fury (Part 1 of 2) [Dramatized Adaptation] (A Court of Thorns and Roses, #2)',
-    'Part 1 of',
+    '61029196',
     'A Court of Mist and Fury (Part 1 of 2) [Dramatized Adaptation]',
     'A Court of Thorns and Roses',
     2
@@ -444,7 +438,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-sorcerers-stone-audio-bundle',
     "Harry Potter and the Sorcerer's Stone (Book 1) [AUDIOBOOK] [UNABRIDGED] (Audio CD) + free Harry Potter t-shirt (Harry Potter, Book 1)",
-    'Book 1 audiobook',
+    '132248439',
     "Harry Potter and the Sorcerer's Stone (Book 1) [AUDIOBOOK] [UNABRIDGED] (Audio CD) + free Harry Potter t-shirt",
     'Harry Potter',
     1
@@ -452,7 +446,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-my-time-again-dash-in-series-name',
     'My Time Again: A Time Travel Novel (My Time Again - A Series of Time Travel Novels Book 1)',
-    'Time Series',
+    '123264903',
     'My Time Again: A Time Travel Novel',
     'My Time Again - A Series of Time Travel Novels',
     1
@@ -460,7 +454,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-way-of-kings-part-of-two',
     'The Way of Kings, Part 1 (The Stormlight Archive, #1, Part 1 of 2)',
-    'Part 1 of',
+    '9329354',
     'The Way of Kings, Part 1 (The Stormlight Archive, #1, Part 1 of 2)',
     null,
     null
@@ -468,7 +462,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-dance-with-dragons-part-of-two',
     'A Dance with Dragons 1: Dreams and Dust (A Song of Ice and Fire, #5, Part 1 of 2)',
-    'Part 1 of',
+    '13337715',
     'A Dance with Dragons 1: Dreams and Dust (A Song of Ice and Fire, #5, Part 1 of 2)',
     null,
     null
@@ -476,7 +470,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-complete-wreck-range',
     'The Complete Wreck (A Series of Unfortunate Events, #1-13)',
-    'A Series of Unfortunate Events',
+    '65113',
     'The Complete Wreck (A Series of Unfortunate Events, #1-13)',
     null,
     null
@@ -484,7 +478,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-harry-potter-boxed-range',
     'Harry Potter Boxed Set, Books 1-5 (Harry Potter, #1-5)',
-    'Harry Potter Book 1',
+    '8',
     'Harry Potter Boxed Set, Books 1-5 (Harry Potter, #1-5)',
     null,
     null
@@ -492,7 +486,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-twig-needs-time-suffix-letter',
     'Twig Needs Time (Considerate Critters Series, #1a)',
-    'Time Series',
+    '211168817',
     'Twig Needs Time (Considerate Critters Series, #1a)',
     null,
     null
@@ -500,7 +494,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-beyond-trailing-audiobook',
     'Beyond (Afterlife Book 1) - Audiobook',
-    'Book 1 audiobook',
+    '246402912',
     'Beyond (Afterlife Book 1) - Audiobook',
     null,
     null
@@ -508,7 +502,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-not-like-her-dash-audiobook',
     'Not Like Her - Selena Bailey Book 1 - Audiobook',
-    'Book 1 audiobook',
+    '260391169',
     'Not Like Her - Selena Bailey Book 1 - Audiobook',
     null,
     null
@@ -516,7 +510,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-oregon-promise-dash-audiobook',
     'Through Dust and Ashes - Oregon Promise, Book 1 - Audiobook',
-    'Book 1 audiobook',
+    '260549455',
     'Through Dust and Ashes - Oregon Promise, Book 1 - Audiobook',
     null,
     null
@@ -524,7 +518,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-dunmara-colon-series-dash-book',
     'If Walls Could Talk: The Dunmara Series - Book 1',
-    'Series Book 1',
+    '244436613',
     'If Walls Could Talk: The Dunmara Series - Book 1',
     null,
     null
@@ -532,7 +526,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-hobbit-book-one-of-three',
     'The Hobbit, Book One of Three',
-    'Hobbit Book 1',
+    '134917064',
     'The Hobbit, Book One of Three',
     null,
     null
@@ -540,7 +534,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-hobbit-comma-or',
     'The Hobbit, or There and Back Again',
-    'or There and Back Again',
+    '5907',
     'The Hobbit, or There and Back Again',
     null,
     null
@@ -548,7 +542,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-hobbit-semicolon-or',
     'The Hobbit; or, There and Back Again.',
-    'or There and Back Again',
+    '242180500',
     'The Hobbit; or, There and Back Again.',
     null,
     null
@@ -556,7 +550,7 @@ export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
   gr(
     'gr-korean-harry-potter',
     '해리 포터와 마법사의 돌 1 (Harry Potter #1, part 1 of 2)',
-    'Part 1 of',
+    '49812',
     '해리 포터와 마법사의 돌 1 (Harry Potter #1, part 1 of 2)',
     null,
     null
