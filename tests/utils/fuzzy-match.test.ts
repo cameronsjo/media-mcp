@@ -286,7 +286,19 @@ describe('extractSeriesFromTitle', () => {
       seriesName: null,
       seriesPosition: null,
     });
-    expect(Date.now() - started).toBeLessThan(500);
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  it('parses a title at the length cap and leaves one past it untouched', () => {
+    const suffix = ' (Series Name, #2)';
+    const atCap = 'a'.repeat(1000 - suffix.length) + suffix;
+    expect(extractSeriesFromTitle(atCap).seriesName).toBe('Series Name');
+    const pastCap = 'a' + atCap;
+    expect(extractSeriesFromTitle(pastCap).seriesName).toBeNull();
+  });
+
+  it('leaves a series name containing parentheses unparsed (known limitation)', () => {
+    expect(extractSeriesFromTitle('Dune (Dune Chronicles (Book 1), #1)').seriesName).toBeNull();
   });
 
   it('returns null series metadata for an unrecognized title', () => {

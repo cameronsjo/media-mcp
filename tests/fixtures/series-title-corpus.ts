@@ -590,7 +590,8 @@ export const syntheticSeriesTitleFixtures: readonly SeriesTitleFixture[] = [
       seriesPosition: null,
     },
     sourceUrl: 'synthetic://series-title-parser',
-    sourceNote: 'Synthetic format candidate; heuristic parsing was removed as ambiguous.',
+    sourceNote:
+      'Synthetic format candidate; a series name that is only "Series" or "The Series" names no series, so the title stays whole.',
   },
   {
     id: 'explicit-dash-named-series-syntax',
@@ -601,7 +602,8 @@ export const syntheticSeriesTitleFixtures: readonly SeriesTitleFixture[] = [
       seriesPosition: null,
     },
     sourceUrl: 'synthetic://series-title-parser',
-    sourceNote: 'Synthetic format candidate; heuristic parsing was removed as ambiguous.',
+    sourceNote:
+      'Synthetic format candidate; a series name that is only "Series" or "The Series" names no series, so the title stays whole.',
   },
   {
     id: 'explicit-comma-part-series-syntax',
@@ -612,7 +614,8 @@ export const syntheticSeriesTitleFixtures: readonly SeriesTitleFixture[] = [
       seriesPosition: null,
     },
     sourceUrl: 'synthetic://series-title-parser',
-    sourceNote: 'Synthetic format candidate; heuristic parsing was removed as ambiguous.',
+    sourceNote:
+      'Synthetic format candidate; a series name that is only "Series" or "The Series" names no series, so the title stays whole.',
   },
   {
     id: 'series-of-subtitle-dash-regression',

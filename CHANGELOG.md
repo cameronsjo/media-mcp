@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Series names from `(Name, #N)` and `(Name, Book N)` no longer keep a trailing comma, and a parenthetical series name can no longer swallow an earlier parenthetical, so `Fourth Wing (Part 1 of 2) [Dramatized Adaptation] (The Empyrean, #1)` yields series `The Empyrean` (#48).
-- Added an attributed exact-record-title corpus and regression matrix for series parsing. The new dash and `Part N of ...` heuristics were removed after review showed they could damage subtitles and format labels; #48 remains open for a structured metadata approach.
+- Added an attributed exact-record-title corpus and regression matrix for series parsing (#48).
 - Structured series metadata from a book source now takes precedence over title parsing from another source.
 - Preserve non-retryable TMDB not-found errors for explicit movie/TV IDs and default unclassified exceptions to non-retryable.
 
