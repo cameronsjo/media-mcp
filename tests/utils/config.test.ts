@@ -17,6 +17,8 @@ const CONFIG_ENV_KEYS = [
   'MCP_HTTP_PATH',
   'MCP_ALLOWED_HOSTS',
   'MCP_ALLOWED_ORIGINS',
+  'MCP_AUTH_TOKEN',
+  'MCP_ALLOW_UNAUTHENTICATED',
   'MCP_CACHE_ENABLED',
   'MCP_CACHE_PATH',
   'MCP_CACHE_CLEANUP_INTERVAL_MS',
@@ -76,6 +78,8 @@ describe('configuration', () => {
       httpPath: '/mcp',
       httpAllowedHosts: undefined,
       httpAllowedOrigins: undefined,
+      httpAuthToken: undefined,
+      httpAllowUnauthenticated: false,
       cacheEnabled: true,
       cachePath: './cache.db',
       cacheCleanupIntervalMs: 3600000,
@@ -120,6 +124,8 @@ describe('configuration', () => {
     vi.stubEnv('MCP_HTTP_PORT', '8123');
     vi.stubEnv('MCP_HTTP_HOST', '0.0.0.0');
     vi.stubEnv('MCP_HTTP_PATH', '/media');
+    vi.stubEnv('MCP_AUTH_TOKEN', 'a'.repeat(32));
+    vi.stubEnv('MCP_ALLOW_UNAUTHENTICATED', 'true');
     vi.stubEnv('MCP_CACHE_ENABLED', 'false');
     vi.stubEnv('MCP_CACHE_PATH', '/tmp/media-cache.db');
     vi.stubEnv('MCP_CACHE_TTL_BOOKS', '101');
@@ -145,6 +151,8 @@ describe('configuration', () => {
       httpPath: '/media',
       httpAllowedHosts: undefined,
       httpAllowedOrigins: undefined,
+      httpAuthToken: 'a'.repeat(32),
+      httpAllowUnauthenticated: true,
       cacheEnabled: false,
       cachePath: '/tmp/media-cache.db',
       cacheCleanupIntervalMs: 3600000,
@@ -178,6 +186,25 @@ describe('configuration', () => {
     expect(config.cacheEnabled).toBe(true);
     expect(config.enableGoodreadsScraping).toBe(true);
     expect(config.otelEnabled).toBe(false);
+  });
+
+  it('treats an empty auth token as unset and only explicit values as the opt-out', () => {
+    vi.stubEnv('MCP_AUTH_TOKEN', '');
+    vi.stubEnv('MCP_ALLOW_UNAUTHENTICATED', 'yes');
+    const { config } = loadConfig();
+    expect(config.httpAuthToken).toBeUndefined();
+    expect(config.httpAllowUnauthenticated).toBe(false);
+
+    vi.stubEnv('MCP_ALLOW_UNAUTHENTICATED', '1');
+    expect(loadConfig().config.httpAllowUnauthenticated).toBe(true);
+  });
+
+  it('rejects a short or whitespace-containing auth token', () => {
+    const message = 'Expected at least 32 characters with no whitespace';
+    vi.stubEnv('MCP_AUTH_TOKEN', 'short-token');
+    expectValidationIssue(() => loadConfig(), 'httpAuthToken', message);
+    vi.stubEnv('MCP_AUTH_TOKEN', `${'a'.repeat(32)} b`);
+    expectValidationIssue(() => loadConfig(), 'httpAuthToken', message);
   });
 
   it('falls back to integer defaults for malformed values and keeps parseInt behavior', () => {

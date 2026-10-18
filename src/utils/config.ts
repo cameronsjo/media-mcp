@@ -49,6 +49,11 @@ export const ConfigSchema = z.object({
   httpPath: z.string().default('/mcp'),
   httpAllowedHosts: z.array(HostnameSchema).min(1).optional(),
   httpAllowedOrigins: z.array(HostnameSchema).min(1).optional(),
+  httpAuthToken: z
+    .string()
+    .regex(/^\S{32,}$/, 'Expected at least 32 characters with no whitespace')
+    .optional(),
+  httpAllowUnauthenticated: z.boolean().default(false),
 
   // Cache settings
   cacheEnabled: z.boolean().default(true),
@@ -107,6 +112,9 @@ export function loadConfig(): { config: Config; sources: SourceStatus[] } {
     httpPath: process.env.MCP_HTTP_PATH,
     httpAllowedHosts: parseHostnameList(process.env.MCP_ALLOWED_HOSTS),
     httpAllowedOrigins: parseHostnameList(process.env.MCP_ALLOWED_ORIGINS),
+    // An empty value (e.g. an unset Compose interpolation) means no token.
+    httpAuthToken: process.env.MCP_AUTH_TOKEN || undefined,
+    httpAllowUnauthenticated: ['1', 'true'].includes(process.env.MCP_ALLOW_UNAUTHENTICATED ?? ''),
 
     // Cache settings (MCP_ prefix)
     cacheEnabled: process.env.MCP_CACHE_ENABLED !== 'false',

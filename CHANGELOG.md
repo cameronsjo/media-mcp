@@ -7,9 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Security
 
-- Series parsing now recognizes `Name - Series Name Series Book N` (also `Series, Book N`) and `Name: Part N of the Series Name Series`. Both require the literal word "Series" to close the series name, so subtitles, `Part 1 of 2` counts, and "the Series" are left alone. Each rule is pinned by a corpus of real Open Library and Goodreads titles (#48).
+- **Breaking:** the HTTP server now supports bearer-token authentication with `MCP_AUTH_TOKEN` on every route except `GET`/`HEAD /health` (exact path) and CORS preflight, compared in constant time. It refuses to start on a non-loopback host without a token unless `MCP_ALLOW_UNAUTHENTICATED=1` is set. The Docker image listens on `0.0.0.0` inside the container, so Docker deployments must set `MCP_AUTH_TOKEN` and configure clients to send it ([#47](https://github.com/cameronsjo/media-mcp/issues/47)).
+- Removed the `/.well-known/oauth-protected-resource` metadata route, which described OAuth support the server does not have.
 
 ### Fixed
 
@@ -25,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed non-ASCII fuzzy similarity by preserving Unicode letters and combining marks, with NFC normalization for equivalent spellings.
 
 ### Added
+
+- Series parsing now recognizes `Name - Series Name Series Book N` (also `Series, Book N`) and `Name: Part N of the Series Name Series`. Both require the literal word "Series" to close the series name, so subtitles, `Part 1 of 2` counts, and "the Series" are left alone. Each rule is pinned by a corpus of real Open Library and Goodreads titles (#48).
 
 - Documented manual Semantic Versioning and changelog updates, with npm version-bump scripts that do not create commits or tags.
 

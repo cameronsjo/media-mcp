@@ -11,6 +11,7 @@ import {
   localhostAllowedOrigins,
   type McpHttpHandler,
 } from '@modelcontextprotocol/server';
+import { assertHttpAuthPolicy, isLoopbackHost, requireBearerToken } from './http-auth.js';
 import { Logger } from '../utils/logger.js';
 
 export interface StreamableHTTPTransportOptions {
@@ -21,6 +22,10 @@ export interface StreamableHTTPTransportOptions {
   handler: McpHttpHandler;
   allowedHosts?: string[];
   allowedOrigins?: string[];
+  /** Bearer token required on every route except /health and CORS preflight. */
+  authToken?: string | undefined;
+  /** Explicit opt-out allowing a non-loopback listener without a token. */
+  allowUnauthenticated?: boolean | undefined;
   configureApp?: (app: Express) => void;
 }
 
@@ -38,8 +43,17 @@ export class StreamableHTTPTransport {
   private readonly options: StreamableHTTPTransportOptions;
 
   constructor(options: StreamableHTTPTransportOptions) {
+    // Fail before building the app: a misconfigured exposure must not start.
+    assertHttpAuthPolicy(options);
     this.options = options;
     this.logger = options.logger;
+    if (!options.authToken && !isLoopbackHost(options.host)) {
+      this.logger.warning('http-transport', {
+        action: 'unauthenticated_exposure_allowed',
+        host: options.host,
+        reason: 'MCP_ALLOW_UNAUTHENTICATED is set and MCP_AUTH_TOKEN is not',
+      });
+    }
     this.app = express();
 
     this.setupMiddleware();
@@ -125,7 +139,7 @@ export class StreamableHTTPTransport {
       res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       res.header(
         'Access-Control-Allow-Headers',
-        'Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Mcp-Method, Mcp-Name'
+        'Authorization, Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Mcp-Method, Mcp-Name'
       );
       res.header('Access-Control-Expose-Headers', 'Mcp-Session-Id');
 
@@ -136,20 +150,39 @@ export class StreamableHTTPTransport {
       next();
     });
 
+    // Default-deny: routes added later, including configureApp extensions, need
+    // the token too. /health stays open because it reports only liveness; HEAD
+    // is included because the Docker health check (`wget --spider`) sends it.
+    // Runs before body parsing, so unauthenticated bodies are never parsed.
+    const authToken = this.options.authToken;
+    if (authToken) {
+      const requireToken = requireBearerToken(authToken, (req) => {
+        this.logger.warning('http-transport', {
+          action: 'auth_rejected',
+          method: req.method,
+          path: req.path,
+          remote: req.socket.remoteAddress,
+          reason: req.headers.authorization ? 'token mismatch' : 'missing bearer token',
+        });
+      });
+      // Never exempt /health when the MCP endpoint itself is served there.
+      const healthExempt = this.options.basePath.toLowerCase().replace(/\/+$/, '') !== '/health';
+      this.app.use((req, res, next) => {
+        const healthCheck =
+          (req.method === 'GET' || req.method === 'HEAD') && req.path === '/health';
+        if (healthExempt && healthCheck) {
+          next();
+          return;
+        }
+        requireToken(req, res, next);
+      });
+    }
+
     this.app.use(express.json());
   }
 
   private setupRoutes(): void {
     const basePath = this.options.basePath;
-
-    // OAuth Protected Resource metadata (for clients that support OAuth)
-    this.app.get('/.well-known/oauth-protected-resource', (_req, res) => {
-      res.json({
-        resource: `http://${this.options.host}:${this.options.port}${basePath}`,
-        resource_documentation_uri: 'https://github.com/your-repo/media-metadata-mcp',
-        mcp_version: '2026-07-28',
-      });
-    });
 
     // The SDK adapter handles JSON-RPC validation, era negotiation, response
     // envelopes and stateless per-request Server construction.
@@ -190,6 +223,7 @@ export class StreamableHTTPTransport {
           host: this.options.host,
           port: this.options.port,
           endpoint: this.options.basePath,
+          auth: this.options.authToken ? 'bearer' : 'none',
         });
         resolve();
       });

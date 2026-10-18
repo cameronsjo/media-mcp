@@ -38,6 +38,8 @@ The server is configured via environment variables. App-specific variables use t
 | `MCP_HTTP_PORT` | HTTP server port | `3000` |
 | `MCP_HTTP_HOST` | HTTP server host | `127.0.0.1` |
 | `MCP_HTTP_PATH` | HTTP endpoint path | `/mcp` |
+| `MCP_AUTH_TOKEN` | Bearer token required on every HTTP route except `/health` (at least 32 characters) | - |
+| `MCP_ALLOW_UNAUTHENTICATED` | Set to `1` to listen beyond loopback without `MCP_AUTH_TOKEN` | - |
 
 ### Cache
 
@@ -140,28 +142,49 @@ Or:
 TMDB_API_KEY=your-key node dist/index.js --transport http
 ```
 
-Connect your MCP client to `http://127.0.0.1:3000/mcp`
+Connect your MCP client to `http://127.0.0.1:3000/mcp`. When `MCP_AUTH_TOKEN` is set, configure the
+client to send `Authorization: Bearer <token>` with each request.
+
+### Authentication
+
+Set `MCP_AUTH_TOKEN` and clients must send `Authorization: Bearer <token>` on
+`/mcp`, `/api/*`, and every other route except CORS preflight and `GET`/`HEAD
+/health` (that exact path), which reports only liveness. A missing or wrong token gets HTTP 401. The comparison
+runs in constant time. Generate a token with `openssl rand -hex 32` and keep it
+in a gitignored `.env` file or a secret store, never in a committed file.
+
+When `MCP_HTTP_HOST` is not a loopback address (`127.0.0.0/8`, `::1`,
+`localhost`) and `MCP_AUTH_TOKEN` is unset, the server refuses to start. Set
+`MCP_ALLOW_UNAUTHENTICATED=1` only when another layer, such as an
+authenticating proxy, restricts access; the server then logs a warning. The
+Docker image listens on `0.0.0.0` inside the container, so it needs a token
+even when the published port is loopback-only.
+
+This is a breaking change for HTTP deployments beyond loopback, including every
+Docker deployment: set `MCP_AUTH_TOKEN` and configure each client to send it.
 
 HTTP requests validate Host and Origin before parsing or dispatch to mitigate
 DNS rebinding and cross-origin browser calls. These checks are not authentication
 or a remote-access boundary: non-browser clients can set Host and omit Origin.
-Use loopback binding, a firewall, or an authenticated proxy to restrict access.
+Use `MCP_AUTH_TOKEN` (above) to authenticate clients.
 By default, only `localhost`, `127.0.0.1`, and `[::1]` are allowed; native clients may omit
 Origin. For LAN/Docker access, set `MCP_ALLOWED_HOSTS=media.internal` and, for
 browser clients, `MCP_ALLOWED_ORIGINS=ui.internal`. These comma-separated
 hostname lists extend localhost access; use hostnames only, without schemes,
 ports, paths, or wildcards. Invalid or empty configured lists fail startup.
 Binding `MCP_HTTP_HOST=0.0.0.0` exposes the listener on all interfaces; the header
-checks do not prevent remote clients from connecting with an allowed Host.
+checks do not prevent remote clients from connecting with an allowed Host, so
+the server refuses to start there without `MCP_AUTH_TOKEN` (see Authentication).
 CORS reflects only a validated Origin, and foreign-origin preflights are rejected.
 Malformed JSON returns a JSON-RPC parse error, without an HTML stack trace.
 `GET` and `DELETE /mcp` return HTTP 405; stateless requests use `POST`.
 This is a breaking migration: existing LAN clients must set `MCP_ALLOWED_HOSTS`
 to their connection hostname (and browser clients must set `MCP_ALLOWED_ORIGINS`).
 The same Host/Origin guards cover `/health` and `/api/widget`; monitoring clients
-must use localhost or an explicitly allowed hostname too. Docker Compose publishes
+must use localhost or an explicitly allowed hostname too. `/api/widget` also
+needs the bearer token when `MCP_AUTH_TOKEN` is set; `/health` does not. Docker Compose publishes
 only on host loopback by default. To expose it deliberately, change the published
-address to a specific LAN address and apply appropriate network/authentication controls.
+address to a specific LAN address; `MCP_AUTH_TOKEN` is required either way.
 
 HTTP serving uses the MCP v2 stateless SDK: modern clients send each request
 with its protocol envelope and do not need an `initialize` handshake or
@@ -362,7 +385,7 @@ The server uses SQLite for caching with the following TTLs:
 
 ## Docker
 
-To expose deliberately, replace the loopback publish address with a specific LAN address and enforce network/proxy controls; media-mcp has no authentication ([cameronsjo/media-mcp#47](https://github.com/cameronsjo/media-mcp/issues/47)).
+The image listens on `0.0.0.0` inside the container, so it refuses to start without `MCP_AUTH_TOKEN` (see [Authentication](#authentication)). Keep the token in a gitignored `.env` file. To expose deliberately, replace the loopback publish address with a specific LAN address.
 
 ### Build
 
@@ -377,6 +400,7 @@ docker run -d \
   --name media-mcp \
   -p 127.0.0.1:3000:3000 \
   -e TMDB_API_KEY=your-key \
+  -e MCP_AUTH_TOKEN \
   -v media-mcp-cache:/app/cache \
   media-metadata-mcp
 ```
@@ -392,6 +416,8 @@ services:
     environment:
       - TMDB_API_KEY=${TMDB_API_KEY}
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY}  # optional
+      # Read from the gitignored .env file next to this compose file.
+      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:-}
     volumes:
       - media-mcp-cache:/app/cache
     healthcheck:
@@ -411,6 +437,12 @@ The HTTP server exposes a health endpoint at `/health`:
 ```bash
 curl http://localhost:3000/health
 # {"status":"healthy","sessions":0,"timestamp":"..."}
+```
+
+`/health` needs no token. Other routes do when `MCP_AUTH_TOKEN` is set:
+
+```bash
+curl -H "Authorization: Bearer $MCP_AUTH_TOKEN" http://localhost:3000/api/widget
 ```
 
 ## Development
