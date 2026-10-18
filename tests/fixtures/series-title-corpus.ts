@@ -121,9 +121,9 @@ export const realSeriesTitleCorpus: readonly SeriesTitleFixture[] = [
     id: 'casimir-bridge-dash-series',
     title: 'Casimir Bridge - Anghazi Series Book 1',
     expected: {
-      cleanTitle: 'Casimir Bridge - Anghazi Series Book 1',
-      seriesName: null,
-      seriesPosition: null,
+      cleanTitle: 'Casimir Bridge',
+      seriesName: 'Anghazi Series',
+      seriesPosition: 1,
     },
     sourceUrl: 'https://openlibrary.org/books/OL40047894M.json',
     sourceNote: 'Open Library title field is exactly "Casimir Bridge - Anghazi Series Book 1".',
@@ -132,9 +132,9 @@ export const realSeriesTitleCorpus: readonly SeriesTitleFixture[] = [
     id: 'angels-punishment-dash-series',
     title: "Angel's Punishment - Punishment Series Book 1",
     expected: {
-      cleanTitle: "Angel's Punishment - Punishment Series Book 1",
-      seriesName: null,
-      seriesPosition: null,
+      cleanTitle: "Angel's Punishment",
+      seriesName: 'Punishment Series',
+      seriesPosition: 1,
     },
     sourceUrl: 'https://openlibrary.org/books/OL56168630M.json',
     sourceNote:
@@ -179,15 +179,388 @@ export const realSeriesTitleCorpus: readonly SeriesTitleFixture[] = [
     title:
       'The Covenant of Abraham, Isaac, and Jacob, Part 1 of the Covenants in the Biblical Evolution Revolution Series',
     expected: {
-      cleanTitle:
-        'The Covenant of Abraham, Isaac, and Jacob, Part 1 of the Covenants in the Biblical Evolution Revolution Series',
-      seriesName: null,
-      seriesPosition: null,
+      cleanTitle: 'The Covenant of Abraham, Isaac, and Jacob',
+      seriesName: 'Covenants in the Biblical Evolution Revolution Series',
+      seriesPosition: 1,
     },
     sourceUrl: 'https://openlibrary.org/books/OL32531681M.json',
     sourceNote:
       'Open Library title field is exactly "The Covenant of Abraham, Isaac, and Jacob, Part 1 of the Covenants in the Biblical Evolution Revolution Series".',
   },
+];
+
+const ol = (
+  id: string,
+  title: string,
+  key: string,
+  cleanTitle: string,
+  seriesName: string | null,
+  seriesPosition: number | null
+): SeriesTitleFixture => ({
+  id,
+  title,
+  expected: { cleanTitle, seriesName, seriesPosition },
+  sourceUrl: `https://openlibrary.org/works/${key}.json`,
+  sourceNote: `Open Library work title is exactly ${JSON.stringify(title)}.`,
+});
+
+/** More Open Library work titles: the dash and "Part N of" shapes in the wild. */
+export const openLibraryFormatCorpus: readonly SeriesTitleFixture[] = [
+  ol(
+    'ol-snow-in-summer',
+    'Snow in Summer - Yellow Wood Series Book 2',
+    'OL28846113W',
+    'Snow in Summer',
+    'Yellow Wood Series',
+    2
+  ),
+  ol(
+    'ol-wild-temptations-comma',
+    'Wild Temptations - Finding Harmony Series, Book 2',
+    'OL29096850W',
+    'Wild Temptations',
+    'Finding Harmony Series',
+    2
+  ),
+  ol(
+    'ol-back-in-the-game-comma',
+    'Back in the Game - Checkmate Series, Book 3',
+    'OL29088000W',
+    'Back in the Game',
+    'Checkmate Series',
+    3
+  ),
+  ol(
+    'ol-scylla',
+    'Scylla - Immortal War Series Book 4',
+    'OL40276849W',
+    'Scylla',
+    'Immortal War Series',
+    4
+  ),
+  ol(
+    'ol-visions-the-series',
+    'Visions - the Hawthorn Series Book 2',
+    'OL40979160W',
+    'Visions',
+    'the Hawthorn Series',
+    2
+  ),
+  ol(
+    'ol-ritual-lowercase-series',
+    'Ritual - Jack Caffery series Book 3',
+    'OL31864708W',
+    'Ritual',
+    'Jack Caffery series',
+    3
+  ),
+  ol(
+    'ol-publisher-puzzle-series',
+    'Genius Publishing 504 Word Search Puzzles and Solutions - Chill Series Book 5',
+    'OL25520825W',
+    'Genius Publishing 504 Word Search Puzzles and Solutions',
+    'Chill Series',
+    5
+  ),
+  // A subtitle with its own colon: the dash rule must not claim "a Party for the
+  // True Hero : Vowel Team Series" as a series name. Only the position parses.
+  ol(
+    'ol-vowel-team-colon-subtitle',
+    'Rescue at Green Avenue - a Party for the True Hero : Vowel Team Series, Book 5',
+    'OL27089038W',
+    'Rescue at Green Avenue - a Party for the True Hero : Vowel Team Series',
+    null,
+    5
+  ),
+  ol(
+    'ol-covenant-shem-part-2',
+    'Covenant of Shem, Esau, and Levi, Part 2 of the Covenants in the Biblical Evolution Revolution Series',
+    'OL29135934W',
+    'Covenant of Shem, Esau, and Levi',
+    'Covenants in the Biblical Evolution Revolution Series',
+    2
+  ),
+  // "the Series" names no series.
+  ol(
+    'ol-archivist-part-of-the-series',
+    'Archivist of Feminine Intention, Part 1 of the Series',
+    'OL38247506W',
+    'Archivist of Feminine Intention, Part 1 of the Series',
+    null,
+    null
+  ),
+  ol(
+    'ol-napoleon-parenthetical-part',
+    'Napoleon (Part 1 of 2)',
+    'OL1159236W',
+    'Napoleon (Part 1 of 2)',
+    null,
+    null
+  ),
+];
+
+const gr = (
+  id: string,
+  title: string,
+  query: string,
+  cleanTitle: string,
+  seriesName: string | null,
+  seriesPosition: number | null
+): SeriesTitleFixture => ({
+  id,
+  title,
+  expected: { cleanTitle, seriesName, seriesPosition },
+  sourceUrl: `https://www.goodreads.com/search?q=${encodeURIComponent(query).replace(/%20/g, '+')}`,
+  sourceNote: `Goodreads search-result title for q=${JSON.stringify(query)}, fetched 2026-10-17, is exactly ${JSON.stringify(title)}.`,
+});
+
+/**
+ * Titles as the Goodreads source returns them (series sits in a trailing
+ * parenthetical). Google Books, Hardcover, and TMDB are not represented: Google
+ * Books answered 429 without a key and the other two need credentials. TMDB
+ * titles never reach this parser (lookup-book only parses book results).
+ */
+export const goodreadsTitleCorpus: readonly SeriesTitleFixture[] = [
+  gr(
+    'gr-holes-series-book',
+    'Holes (Holes Series Book 1)',
+    'Series Book 1',
+    'Holes',
+    'Holes Series',
+    1
+  ),
+  gr(
+    'gr-dopamine-detox-long-subtitle',
+    'Dopamine Detox : A Short Guide to Remove Distractions and Train Your Brain to Do Hard Things (Productivity Series Book 1)',
+    'Series Book 1',
+    'Dopamine Detox : A Short Guide to Remove Distractions and Train Your Brain to Do Hard Things',
+    'Productivity Series',
+    1
+  ),
+  gr(
+    'gr-case-of-the-hobbit-heist',
+    'Case of the Hobbit Heist (Corgi Case Files Book 19)',
+    'Hobbit Book 1',
+    'Case of the Hobbit Heist',
+    'Corgi Case Files',
+    19
+  ),
+  gr(
+    'gr-the-plot-comma-hash',
+    'The Plot (The Book Series, #1)',
+    'Series Book 1',
+    'The Plot',
+    'The Book Series',
+    1
+  ),
+  gr(
+    'gr-bad-beginning-comma-hash',
+    'The Bad Beginning (A Series of Unfortunate Events, #1)',
+    'A Series of Unfortunate Events',
+    'The Bad Beginning',
+    'A Series of Unfortunate Events',
+    1
+  ),
+  gr(
+    'gr-beatrice-letters-decimal',
+    'The Beatrice Letters (A Series of Unfortunate Events, #12.5)',
+    'A Series of Unfortunate Events',
+    'The Beatrice Letters',
+    'A Series of Unfortunate Events',
+    12.5
+  ),
+  gr(
+    'gr-wrinkle-in-time',
+    'A Wrinkle in Time (Time Series, #1)',
+    'Time Series',
+    'A Wrinkle in Time',
+    'Time Series',
+    1
+  ),
+  gr(
+    'gr-hammer-time-series-hash',
+    'Hammer Time (Chequered Flag Series #1)',
+    'Time Series',
+    'Hammer Time',
+    'Chequered Flag Series',
+    1
+  ),
+  gr(
+    'gr-harry-potter-comma-book',
+    "Harry Potter and the Sorcerer's Stone (Harry Potter, Book 1)",
+    'Harry Potter Book 1',
+    "Harry Potter and the Sorcerer's Stone",
+    'Harry Potter',
+    1
+  ),
+  gr(
+    'gr-hobbit-graphic-novel-book-3',
+    'The Hobbit: or There and Back Again (Graphic Novel, Book 3)',
+    'or There and Back Again',
+    'The Hobbit: or There and Back Again',
+    'Graphic Novel',
+    3
+  ),
+  gr(
+    'gr-by-sin-i-rise-part-one',
+    'By Sin I Rise: Part One (Sins of the Fathers, #1)',
+    'Part 1 of',
+    'By Sin I Rise: Part One',
+    'Sins of the Fathers',
+    1
+  ),
+  gr(
+    'gr-korra-part-one',
+    'The Legend of Korra: Turf Wars, Part One (The Legend of Korra: Turf Wars, #1)',
+    'Part 1 of',
+    'The Legend of Korra: Turf Wars, Part One',
+    'The Legend of Korra: Turf Wars',
+    1
+  ),
+  gr(
+    'gr-part-of-your-world',
+    'Part of Your World (Part of Your World, #1)',
+    'Part 1 of',
+    'Part of Your World',
+    'Part of Your World',
+    1
+  ),
+  gr(
+    'gr-fourth-wing-dramatized',
+    'Fourth Wing (Part 1 of 2) [Dramatized Adaptation] (The Empyrean, #1)',
+    'Part 1 of',
+    'Fourth Wing (Part 1 of 2) [Dramatized Adaptation]',
+    'The Empyrean',
+    1
+  ),
+  gr(
+    'gr-court-mist-fury-dramatized',
+    'A Court of Mist and Fury (Part 1 of 2) [Dramatized Adaptation] (A Court of Thorns and Roses, #2)',
+    'Part 1 of',
+    'A Court of Mist and Fury (Part 1 of 2) [Dramatized Adaptation]',
+    'A Court of Thorns and Roses',
+    2
+  ),
+  gr(
+    'gr-sorcerers-stone-audio-bundle',
+    "Harry Potter and the Sorcerer's Stone (Book 1) [AUDIOBOOK] [UNABRIDGED] (Audio CD) + free Harry Potter t-shirt (Harry Potter, Book 1)",
+    'Book 1 audiobook',
+    "Harry Potter and the Sorcerer's Stone (Book 1) [AUDIOBOOK] [UNABRIDGED] (Audio CD) + free Harry Potter t-shirt",
+    'Harry Potter',
+    1
+  ),
+  gr(
+    'gr-my-time-again-dash-in-series-name',
+    'My Time Again: A Time Travel Novel (My Time Again - A Series of Time Travel Novels Book 1)',
+    'Time Series',
+    'My Time Again: A Time Travel Novel',
+    'My Time Again - A Series of Time Travel Novels',
+    1
+  ),
+  gr(
+    'gr-way-of-kings-part-of-two',
+    'The Way of Kings, Part 1 (The Stormlight Archive, #1, Part 1 of 2)',
+    'Part 1 of',
+    'The Way of Kings, Part 1 (The Stormlight Archive, #1, Part 1 of 2)',
+    null,
+    null
+  ),
+  gr(
+    'gr-dance-with-dragons-part-of-two',
+    'A Dance with Dragons 1: Dreams and Dust (A Song of Ice and Fire, #5, Part 1 of 2)',
+    'Part 1 of',
+    'A Dance with Dragons 1: Dreams and Dust (A Song of Ice and Fire, #5, Part 1 of 2)',
+    null,
+    null
+  ),
+  gr(
+    'gr-complete-wreck-range',
+    'The Complete Wreck (A Series of Unfortunate Events, #1-13)',
+    'A Series of Unfortunate Events',
+    'The Complete Wreck (A Series of Unfortunate Events, #1-13)',
+    null,
+    null
+  ),
+  gr(
+    'gr-harry-potter-boxed-range',
+    'Harry Potter Boxed Set, Books 1-5 (Harry Potter, #1-5)',
+    'Harry Potter Book 1',
+    'Harry Potter Boxed Set, Books 1-5 (Harry Potter, #1-5)',
+    null,
+    null
+  ),
+  gr(
+    'gr-twig-needs-time-suffix-letter',
+    'Twig Needs Time (Considerate Critters Series, #1a)',
+    'Time Series',
+    'Twig Needs Time (Considerate Critters Series, #1a)',
+    null,
+    null
+  ),
+  gr(
+    'gr-beyond-trailing-audiobook',
+    'Beyond (Afterlife Book 1) - Audiobook',
+    'Book 1 audiobook',
+    'Beyond (Afterlife Book 1) - Audiobook',
+    null,
+    null
+  ),
+  gr(
+    'gr-not-like-her-dash-audiobook',
+    'Not Like Her - Selena Bailey Book 1 - Audiobook',
+    'Book 1 audiobook',
+    'Not Like Her - Selena Bailey Book 1 - Audiobook',
+    null,
+    null
+  ),
+  gr(
+    'gr-oregon-promise-dash-audiobook',
+    'Through Dust and Ashes - Oregon Promise, Book 1 - Audiobook',
+    'Book 1 audiobook',
+    'Through Dust and Ashes - Oregon Promise, Book 1 - Audiobook',
+    null,
+    null
+  ),
+  gr(
+    'gr-dunmara-colon-series-dash-book',
+    'If Walls Could Talk: The Dunmara Series - Book 1',
+    'Series Book 1',
+    'If Walls Could Talk: The Dunmara Series - Book 1',
+    null,
+    null
+  ),
+  gr(
+    'gr-hobbit-book-one-of-three',
+    'The Hobbit, Book One of Three',
+    'Hobbit Book 1',
+    'The Hobbit, Book One of Three',
+    null,
+    null
+  ),
+  gr(
+    'gr-hobbit-comma-or',
+    'The Hobbit, or There and Back Again',
+    'or There and Back Again',
+    'The Hobbit, or There and Back Again',
+    null,
+    null
+  ),
+  gr(
+    'gr-hobbit-semicolon-or',
+    'The Hobbit; or, There and Back Again.',
+    'or There and Back Again',
+    'The Hobbit; or, There and Back Again.',
+    null,
+    null
+  ),
+  gr(
+    'gr-korean-harry-potter',
+    '해리 포터와 마법사의 돌 1 (Harry Potter #1, part 1 of 2)',
+    'Part 1 of',
+    '해리 포터와 마법사의 돌 1 (Harry Potter #1, part 1 of 2)',
+    null,
+    null
+  ),
 ];
 
 /**
@@ -333,6 +706,30 @@ export const syntheticSeriesTitleFixtures: readonly SeriesTitleFixture[] = [
     sourceNote:
       'Synthetic overlap regression; the established parenthetical series format takes precedence.',
   },
+  {
+    id: 'curse-part-series-syntax',
+    title: 'Curse: Part 1 of the Battle of Fansareah Series',
+    expected: {
+      cleanTitle: 'Curse',
+      seriesName: 'Battle of Fansareah Series',
+      seriesPosition: 1,
+    },
+    sourceUrl: 'synthetic://series-title-parser',
+    sourceNote:
+      'Synthetic string, not a catalog title (the record is just "Curse"); pins the Part N of Series format.',
+  },
+  {
+    id: 'generic-time-series-dash-tradeoff',
+    title: 'Statistics - Time Series Book 2',
+    expected: {
+      cleanTitle: 'Statistics',
+      seriesName: 'Time Series',
+      seriesPosition: 2,
+    },
+    sourceUrl: 'synthetic://series-title-parser',
+    sourceNote:
+      'Accepted trade-off. No catalog record has this shape; every real "X - Y Series Book N" title found (20 in Open Library) is a branded series. A generic "Y Series" cannot be told apart by syntax.',
+  },
 ];
 
 /**
@@ -360,7 +757,6 @@ export const reviewRegressionTitles: readonly string[] = [
   'Book Name: Part 1 of 2, Unabridged',
   'Book Name, Part 1 of 2 Parts.',
   'Foo - A Novel in a Series Book 2',
-  'Statistics - Time Series Book 2',
   'Foo - Series Book 1',
   'Foo - Seriesly Book 1',
   'Foo -Series Book 1',
@@ -373,7 +769,6 @@ export const reviewRegressionTitles: readonly string[] = [
   'Part 1 of And',
   // These formerly misattributed strings are retained only as synthetic
   // parser regressions.
-  'Curse: Part 1 of the Battle of Fansareah Series',
   'The Autobiography Of Henry VIII: Part 1 of 2',
   'Spandau: The Secret Diaries Part 1 of 2',
   'Patton: Ordeal and Triumph Part 1 of 2',

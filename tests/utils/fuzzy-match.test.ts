@@ -10,6 +10,8 @@ import {
   stringSimilarity,
 } from '../../src/utils/fuzzy-match.js';
 import {
+  goodreadsTitleCorpus,
+  openLibraryFormatCorpus,
   realSeriesTitleCorpus,
   reviewRegressionTitles,
   syntheticSeriesTitleFixtures,
@@ -141,6 +143,16 @@ describe('extractSeriesFromTitle', () => {
     expect(extractSeriesFromTitle(fixture.title)).toEqual(fixture.expected);
   });
 
+  it.each(openLibraryFormatCorpus)('matches Open Library format fixture $id', (fixture) => {
+    expect(fixture.sourceUrl).toMatch(/^https:\/\/openlibrary\.org\//);
+    expect(extractSeriesFromTitle(fixture.title)).toEqual(fixture.expected);
+  });
+
+  it.each(goodreadsTitleCorpus)('matches Goodreads fixture $id', (fixture) => {
+    expect(fixture.sourceUrl).toMatch(/^https:\/\/www\.goodreads\.com\//);
+    expect(extractSeriesFromTitle(fixture.title)).toEqual(fixture.expected);
+  });
+
   it.each(syntheticSeriesTitleFixtures)('matches synthetic regression fixture $id', (fixture) => {
     expect(extractSeriesFromTitle(fixture.title)).toEqual(fixture.expected);
   });
@@ -235,7 +247,7 @@ describe('extractSeriesFromTitle', () => {
 
   it.each([
     ['Title (86 #1)', '86'],
-    ['Title (86, #1)', '86,'],
+    ['Title (86, #1)', '86'],
     ['Title (86 Book 1)', '86'],
     ['Title: 86 #1', '86'],
   ])('preserves numeric series names in existing formats: %s', (title, seriesName) => {
@@ -261,6 +273,20 @@ describe('extractSeriesFromTitle', () => {
       seriesName: null,
       seriesPosition: null,
     });
+  });
+
+  it.each([
+    ['spaces', ' '.repeat(50_000) + 'Series Book 1x'],
+    ['dashes', ' - '.repeat(20_000) + 'x'],
+    ['parentheses', '('.repeat(30_000)],
+  ])('returns an over-long title of %s unchanged without backtracking', (_name, title) => {
+    const started = Date.now();
+    expect(extractSeriesFromTitle(title)).toEqual({
+      cleanTitle: title,
+      seriesName: null,
+      seriesPosition: null,
+    });
+    expect(Date.now() - started).toBeLessThan(500);
   });
 
   it('returns null series metadata for an unrecognized title', () => {
