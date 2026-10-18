@@ -188,8 +188,9 @@ export function extractSeriesFromTitle(title: string): {
     /^(?<title>.+?)\s*\(\s*Book\s+(?<position>\d+(?:\.\d+)?)\s*\)$/i,
     // "Title #1"
     /^(?<title>.+?)\s*#(?<position>\d+(?:\.\d+)?)$/,
-    // "Title - Name Series Book 1" or "..., Book 1"; before "Title, Book 1" so the comma form keeps its series
-    /^(?<title>.+?)\s+-\s+(?<series>[^:()]+?\s+Series),?\s+Book\s+(?<position>\d+(?:\.\d+)?)$/i,
+    // "Title - Name Series Book 1" or "..., Book 1"; before "Title, Book 1" so the comma form keeps its series.
+    // The name may not cross " - ", so an earlier subtitle dash stays in the title.
+    /^(?<title>.+?)\s+-\s+(?<series>(?:(?!\s-\s)[^:()])+?\s+Series),?\s+Book\s+(?<position>\d+(?:\.\d+)?)$/i,
     // "Title, Book 1"
     /^(?<title>.+?),\s*Book\s+(?<position>\d+(?:\.\d+)?)$/i,
     // "Title: Part 1 of the Name Series" (or after a comma). The name may not open with a
