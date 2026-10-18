@@ -146,48 +146,75 @@ export function bookMatchScore(
 }
 
 /**
- * Extract series information from a title string
+ * A series name that is only a grammatical tail: "the Series", "a Series",
+ * or a phrase ending "in a Series" / "Series of". It names no series.
+ */
+const UNNAMED_SERIES = /^(?:(?:a|an|the)\s+)?series(?:\s+series)*$|\b(?:a|an|the|of|in)\s+series$/i;
+
+/**
+ * Titles come from remote sources. Each pattern pairs a lazy group with `\s*`
+ * or `\s+`, which backtracks cubically on a run of whitespace (tens of seconds
+ * at 1000 characters). Whitespace is collapsed to single spaces before
+ * matching, which removes the free split points, and the length cap bounds
+ * what remains. No real title is near the cap.
+ */
+const MAX_PARSED_TITLE_LENGTH = 500;
+
+/**
+ * Extract series information from a title string.
+ *
+ * Patterns run in order and the first match wins. The dash and "Part N of"
+ * formats are deliberately narrow: they require the literal word "Series"
+ * closing the series name, because a bare "Name - Subtitle Book 1" or
+ * "Part 1 of 2" is as likely a subtitle or format count as a series. Each
+ * is pinned against real catalog titles in tests/fixtures/series-title-corpus.ts.
  */
 export function extractSeriesFromTitle(title: string): {
   cleanTitle: string;
   seriesName: string | null;
   seriesPosition: number | null;
 } {
-  // Common series patterns
+  // Common series patterns. A parenthesized series name never contains
+  // parentheses, so "Title (Part 1 of 2) [Edition] (Series, #1)" binds to the
+  // last group.
   const patterns = [
     // "(Series Name #1)" or "(Series Name, #1)"
-    /^(.+?)\s*\(\s*(.+?)\s*[,#]\s*(\d+(?:\.\d+)?)\s*\)$/,
+    /^(?<title>.+?)\s*\(\s*(?<series>[^()]+?)\s*[,#]\s*(?<position>\d+(?:\.\d+)?)\s*\)$/,
     // "Title (Series Name Book 1)"
-    /^(.+?)\s*\(\s*(.+?)\s+Book\s+(\d+(?:\.\d+)?)\s*\)$/i,
+    /^(?<title>.+?)\s*\(\s*(?<series>[^()]+?)\s+Book\s+(?<position>\d+(?:\.\d+)?)\s*\)$/i,
     // "Title: Series Name #1"
-    /^(.+?):\s*(.+?)\s*#(\d+(?:\.\d+)?)$/,
+    /^(?<title>.+?):\s*(?<series>.+?)\s*#(?<position>\d+(?:\.\d+)?)$/,
     // "Title (Book 1)"
-    /^(.+?)\s*\(\s*Book\s+(\d+(?:\.\d+)?)\s*\)$/i,
+    /^(?<title>.+?)\s*\(\s*Book\s+(?<position>\d+(?:\.\d+)?)\s*\)$/i,
     // "Title #1"
-    /^(.+?)\s*#(\d+(?:\.\d+)?)$/,
+    /^(?<title>.+?)\s*#(?<position>\d+(?:\.\d+)?)$/,
+    // "Title - Name Series Book 1" or "..., Book 1"; before "Title, Book 1" so the comma form keeps its series.
+    // The name may not cross " - ", so an earlier subtitle dash stays in the title.
+    /^(?<title>.+?)\s+-\s+(?<series>(?:(?!\s-\s)[^:()])+?\s+Series),?\s+Book\s+(?<position>\d+(?:\.\d+)?)$/i,
     // "Title, Book 1"
-    /^(.+?),\s*Book\s+(\d+(?:\.\d+)?)$/i,
+    /^(?<title>.+?),\s*Book\s+(?<position>\d+(?:\.\d+)?)$/i,
+    // "Title: Part 1 of the Name Series" (or after a comma). The name may not open with a
+    // count ("Part 1 of 2 Series", "of Two-Disc Series"); "the" is dropped as part of "of the",
+    // whereas the dash rule keeps it, as the parenthetical rules do.
+    /^(?<title>.+?)\s*[:,]\s+Part\s+(?<position>\d+)\s+of\s+(?!(?:the\s+)?(?:\d|(?:one|two|three|four|five|six|seven|eight|nine|ten|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b))(?:the\s+)?(?<series>.+?\s+Series)$/i,
   ];
 
+  if (title.length > MAX_PARSED_TITLE_LENGTH) {
+    return { cleanTitle: title, seriesName: null, seriesPosition: null };
+  }
+
+  const collapsed = title.replace(/\s+/g, ' ').trim();
+
   for (const pattern of patterns) {
-    const match = title.match(pattern);
-    if (match) {
-      if (match.length === 4) {
-        // Pattern with series name and position
-        return {
-          cleanTitle: match[1].trim(),
-          seriesName: match[2].trim(),
-          seriesPosition: parseFloat(match[3]),
-        };
-      } else if (match.length === 3) {
-        // Pattern with position only
-        return {
-          cleanTitle: match[1].trim(),
-          seriesName: null,
-          seriesPosition: parseFloat(match[2]),
-        };
-      }
-    }
+    const groups = collapsed.match(pattern)?.groups;
+    if (!groups) continue;
+    const seriesName = groups.series?.replace(/[\s,]+$/, '') ?? null;
+    if (seriesName !== null && UNNAMED_SERIES.test(seriesName)) continue;
+    return {
+      cleanTitle: groups.title.trim(),
+      seriesName,
+      seriesPosition: parseFloat(groups.position),
+    };
   }
 
   return {

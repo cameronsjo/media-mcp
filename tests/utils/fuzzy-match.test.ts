@@ -10,6 +10,8 @@ import {
   stringSimilarity,
 } from '../../src/utils/fuzzy-match.js';
 import {
+  goodreadsTitleCorpus,
+  openLibraryFormatCorpus,
   realSeriesTitleCorpus,
   reviewRegressionTitles,
   syntheticSeriesTitleFixtures,
@@ -141,6 +143,16 @@ describe('extractSeriesFromTitle', () => {
     expect(extractSeriesFromTitle(fixture.title)).toEqual(fixture.expected);
   });
 
+  it.each(openLibraryFormatCorpus)('matches Open Library format fixture $id', (fixture) => {
+    expect(fixture.sourceUrl).toMatch(/^https:\/\/openlibrary\.org\//);
+    expect(extractSeriesFromTitle(fixture.title)).toEqual(fixture.expected);
+  });
+
+  it.each(goodreadsTitleCorpus)('matches Goodreads fixture $id', (fixture) => {
+    expect(fixture.sourceUrl).toMatch(/^https:\/\/www\.goodreads\.com\/book\/show\/\d+$/);
+    expect(extractSeriesFromTitle(fixture.title)).toEqual(fixture.expected);
+  });
+
   it.each(syntheticSeriesTitleFixtures)('matches synthetic regression fixture $id', (fixture) => {
     expect(extractSeriesFromTitle(fixture.title)).toEqual(fixture.expected);
   });
@@ -235,7 +247,7 @@ describe('extractSeriesFromTitle', () => {
 
   it.each([
     ['Title (86 #1)', '86'],
-    ['Title (86, #1)', '86,'],
+    ['Title (86, #1)', '86'],
     ['Title (86 Book 1)', '86'],
     ['Title: 86 #1', '86'],
   ])('preserves numeric series names in existing formats: %s', (title, seriesName) => {
@@ -261,6 +273,79 @@ describe('extractSeriesFromTitle', () => {
       seriesName: null,
       seriesPosition: null,
     });
+  });
+
+  it.each([
+    ['spaces', ' '.repeat(50_000) + 'Series Book 1x'],
+    ['dashes', ' - '.repeat(20_000) + 'x'],
+    ['parentheses', '('.repeat(30_000)],
+  ])('returns an over-long title of %s unchanged without backtracking', (_name, title) => {
+    const started = Date.now();
+    expect(extractSeriesFromTitle(title)).toEqual({
+      cleanTitle: title,
+      seriesName: null,
+      seriesPosition: null,
+    });
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  it.each([
+    ['x (' + ' '.repeat(497)],
+    ['x (' + ' '.repeat(496) + '!'],
+    ['x, Part 1 of the ' + ' '.repeat(480) + ' 1)'],
+    ['x - ' + '\t'.repeat(490) + '#1!'],
+    ['x: ' + '\u00a0'.repeat(490) + '!'],
+  ])('keeps whitespace-run titles at the cap fast', (title) => {
+    // Collapsed, one call runs in under 1 ms; without the collapse the slow rows take
+    // ~20-110 ms each, so ten calls push a regression well past the budget.
+    const started = Date.now();
+    let result = extractSeriesFromTitle(title);
+    for (let run = 1; run < 10; run += 1) result = extractSeriesFromTitle(title);
+    expect(Date.now() - started).toBeLessThan(100);
+    expect(result).toEqual({ cleanTitle: title, seriesName: null, seriesPosition: null });
+  });
+
+  it.each([
+    'Foo: Part 1 of 2 Series',
+    'Foo: Part 1 of 2 Volume Series',
+    'Hamlet: Part 1 of 3 of the Complete Works Series',
+    'Foo: Part 1 of Two-Disc Series',
+    'Foo: Part 1 of the 2 Volume Series',
+    'Foo - Series Series Book 1',
+  ])('does not read a part count or repeated Series as a series name: %s', (title) => {
+    expect(extractSeriesFromTitle(title)).toEqual({
+      cleanTitle: title,
+      seriesName: null,
+      seriesPosition: null,
+    });
+  });
+
+  it('strips "the" after "of" in the Part rule but keeps it in the dash rule', () => {
+    expect(extractSeriesFromTitle('Foo: Part 2 of the Hawthorn Series').seriesName).toBe(
+      'Hawthorn Series'
+    );
+    expect(extractSeriesFromTitle('Foo - the Hawthorn Series Book 2').seriesName).toBe(
+      'the Hawthorn Series'
+    );
+  });
+
+  it.each(['Title (Series, #1)', 'Title (The Series Book 1)', 'Title (Series Series #2)'])(
+    'does not read a bare Series as a name in a parenthetical format: %s',
+    (title) => {
+      expect(extractSeriesFromTitle(title).seriesName).toBeNull();
+    }
+  );
+
+  it('parses a title at the length cap and leaves one past it untouched', () => {
+    const suffix = ' (Series Name, #2)';
+    const atCap = 'a'.repeat(500 - suffix.length) + suffix;
+    expect(extractSeriesFromTitle(atCap).seriesName).toBe('Series Name');
+    const pastCap = 'a' + atCap;
+    expect(extractSeriesFromTitle(pastCap).seriesName).toBeNull();
+  });
+
+  it('leaves a series name containing parentheses unparsed (known limitation)', () => {
+    expect(extractSeriesFromTitle('Dune (Dune Chronicles (Book 1), #1)').seriesName).toBeNull();
   });
 
   it('returns null series metadata for an unrecognized title', () => {

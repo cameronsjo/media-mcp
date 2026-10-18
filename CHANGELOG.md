@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Added an attributed exact-record-title corpus and regression matrix for series parsing. The new dash and `Part N of ...` heuristics were removed after review showed they could damage subtitles and format labels; #48 remains open for a structured metadata approach.
+- Series names from `(Name, #N)` and `(Name, Book N)` no longer keep a trailing comma, and a parenthetical series name can no longer swallow an earlier parenthetical, so `Fourth Wing (Part 1 of 2) [Dramatized Adaptation] (The Empyrean, #1)` yields series `The Empyrean` (#48).
+- Added an attributed exact-record-title corpus and regression matrix for series parsing (#48).
 - Structured series metadata from a book source now takes precedence over title parsing from another source.
 - Preserve non-retryable TMDB not-found errors for explicit movie/TV IDs and default unclassified exceptions to non-retryable.
 
@@ -25,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed non-ASCII fuzzy similarity by preserving Unicode letters and combining marks, with NFC normalization for equivalent spellings.
 
 ### Added
+
+- Series parsing now recognizes `Name - Series Name Series Book N` (also `Series, Book N`) and `Name: Part N of the Series Name Series`. Both require the literal word "Series" to close the series name, so subtitles, `Part 1 of 2` counts, and "the Series" are left alone. Each rule is pinned by a corpus of real Open Library and Goodreads titles (#48).
 
 - Documented manual Semantic Versioning and changelog updates, with npm version-bump scripts that do not create commits or tags.
 
