@@ -152,11 +152,13 @@ export function bookMatchScore(
 const UNNAMED_SERIES = /^(?:(?:a|an|the)\s+)?series$|\b(?:a|an|the|of|in)\s+series$/i;
 
 /**
- * Titles come from remote sources. The patterns below backtrack
- * quadratically or worse on long runs of spaces, dashes, or parentheses
- * (tens of seconds at 50k characters), and no real title is near this long.
+ * Titles come from remote sources. Each pattern pairs a lazy group with `\s*`
+ * or `\s+`, which backtracks cubically on a run of whitespace (tens of seconds
+ * at 1000 characters). Whitespace is collapsed to single spaces before
+ * matching, which removes the free split points, and the length cap bounds
+ * what remains. No real title is near the cap.
  */
-const MAX_PARSED_TITLE_LENGTH = 1000;
+const MAX_PARSED_TITLE_LENGTH = 500;
 
 /**
  * Extract series information from a title string.
@@ -198,8 +200,10 @@ export function extractSeriesFromTitle(title: string): {
     return { cleanTitle: title, seriesName: null, seriesPosition: null };
   }
 
+  const collapsed = title.replace(/\s+/g, ' ').trim();
+
   for (const pattern of patterns) {
-    const groups = title.match(pattern)?.groups;
+    const groups = collapsed.match(pattern)?.groups;
     if (!groups) continue;
     const seriesName = groups.series?.replace(/[\s,]+$/, '') ?? null;
     if (seriesName !== null && UNNAMED_SERIES.test(seriesName)) continue;

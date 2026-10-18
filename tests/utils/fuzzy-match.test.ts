@@ -289,9 +289,21 @@ describe('extractSeriesFromTitle', () => {
     expect(Date.now() - started).toBeLessThan(2000);
   });
 
+  it.each([
+    ['x (' + ' '.repeat(497)],
+    ['x (' + ' '.repeat(496) + '!'],
+    ['x, Part 1 of the ' + ' '.repeat(480) + ' 1)'],
+    ['x - ' + '\t'.repeat(490) + '#1!'],
+    ['x: ' + '\u00a0'.repeat(490) + '!'],
+  ])('keeps whitespace-run titles at the cap fast', (title) => {
+    const started = Date.now();
+    extractSeriesFromTitle(title);
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
   it('parses a title at the length cap and leaves one past it untouched', () => {
     const suffix = ' (Series Name, #2)';
-    const atCap = 'a'.repeat(1000 - suffix.length) + suffix;
+    const atCap = 'a'.repeat(500 - suffix.length) + suffix;
     expect(extractSeriesFromTitle(atCap).seriesName).toBe('Series Name');
     const pastCap = 'a' + atCap;
     expect(extractSeriesFromTitle(pastCap).seriesName).toBeNull();
