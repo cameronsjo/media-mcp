@@ -299,9 +299,6 @@ export const openLibraryFormatCorpus: readonly SeriesTitleFixture[] = [
   ),
 ];
 
-/** Goodreads cuts og:title at this many characters. */
-const GOODREADS_OG_TITLE_LENGTH = 50;
-
 const gr = (
   id: string,
   title: string,
@@ -314,18 +311,15 @@ const gr = (
   title,
   expected: { cleanTitle, seriesName, seriesPosition },
   sourceUrl: `https://www.goodreads.com/book/show/${bookId}`,
-  sourceNote:
-    title.length <= GOODREADS_OG_TITLE_LENGTH
-      ? `Goodreads record ${bookId} page title (og:title) is exactly ${JSON.stringify(title)}, checked 2026-10-17.`
-      : `Goodreads record ${bookId} page title (og:title) matches the first ${GOODREADS_OG_TITLE_LENGTH} characters of ${JSON.stringify(title)}; the rest is unverified, checked 2026-10-17.`,
+  sourceNote: `Goodreads record ${bookId} titleComplete is exactly ${JSON.stringify(title)}, checked 2026-10-18.`,
 });
 
 /**
  * Titles as the Goodreads source returns them (series sits in a trailing
  * parenthetical). Each row cites its Goodreads book id and was checked against
- * that record's og:title. Goodreads truncates og:title, so a title longer than
- * GOODREADS_OG_TITLE_LENGTH is verified on that prefix only; each row's
- * sourceNote says which. Google Books and Hardcover are not represented (Google
+ * the full titleComplete field on that record page (the JSON-LD Book name
+ * agrees once HTML entities are decoded). og:title is not used: Goodreads cuts
+ * it at 50 characters, before the series part of long titles. Google Books and Hardcover are not represented (Google
  * Books answered 429 without a key, Hardcover needs one; cameronsjo/media-mcp#59).
  * TMDB titles never reach this parser (lookup-book only parses book results).
  */
