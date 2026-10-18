@@ -296,9 +296,12 @@ describe('extractSeriesFromTitle', () => {
     ['x - ' + '\t'.repeat(490) + '#1!'],
     ['x: ' + '\u00a0'.repeat(490) + '!'],
   ])('keeps whitespace-run titles at the cap fast', (title) => {
+    // Collapsed, one call runs in under 1 ms; without the collapse the slow rows take
+    // ~20-110 ms each, so ten calls push a regression well past the budget.
     const started = Date.now();
-    const result = extractSeriesFromTitle(title);
-    expect(Date.now() - started).toBeLessThan(1000);
+    let result = extractSeriesFromTitle(title);
+    for (let run = 1; run < 10; run += 1) result = extractSeriesFromTitle(title);
+    expect(Date.now() - started).toBeLessThan(100);
     expect(result).toEqual({ cleanTitle: title, seriesName: null, seriesPosition: null });
   });
 
