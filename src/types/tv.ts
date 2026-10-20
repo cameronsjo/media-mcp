@@ -34,10 +34,12 @@ export type Season = z.infer<typeof SeasonSchema>;
 // TV show ratings
 export const TVRatingsSchema = z.object({
   tmdb: RatingSchema.optional(),
-  imdb: z.object({
-    score: z.number().nullable(),
-    id: z.string().nullable(),
-  }).optional(),
+  imdb: z
+    .object({
+      score: z.number().nullable(),
+      id: z.string().nullable(),
+    })
+    .optional(),
 });
 export type TVRatings = z.infer<typeof TVRatingsSchema>;
 

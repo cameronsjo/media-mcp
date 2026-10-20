@@ -17,9 +17,7 @@ function createPartialBookData(
 describe('mergeBookResults', () => {
   describe('empty input handling', () => {
     it('throws error when no results provided', () => {
-      expect(() => mergeBookResults([], ['open_library'], [])).toThrow(
-        'No results to merge'
-      );
+      expect(() => mergeBookResults([], ['open_library'], [])).toThrow('No results to merge');
     });
   });
 
@@ -285,12 +283,8 @@ describe('mergeBookResults', () => {
         []
       );
 
-      expect(result.source_urls.open_library).toBe(
-        'https://openlibrary.org/works/OL12345W'
-      );
-      expect(result.source_urls.goodreads).toBe(
-        'https://www.goodreads.com/book/show/12345678'
-      );
+      expect(result.source_urls.open_library).toBe('https://openlibrary.org/works/OL12345W');
+      expect(result.source_urls.goodreads).toBe('https://www.goodreads.com/book/show/12345678');
     });
   });
 
@@ -427,11 +421,7 @@ describe('mergeBookResults', () => {
         []
       );
 
-      expect(result._meta.sources_queried).toEqual([
-        'open_library',
-        'goodreads',
-        'google_books',
-      ]);
+      expect(result._meta.sources_queried).toEqual(['open_library', 'goodreads', 'google_books']);
     });
 
     it('tracks failed sources when present', () => {

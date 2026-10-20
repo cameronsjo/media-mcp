@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { shapeWatchProviders, LookupMovieTool, LookupMovieInputSchema } from '../../src/tools/lookup-movie.js';
+import {
+  shapeWatchProviders,
+  LookupMovieTool,
+  LookupMovieInputSchema,
+} from '../../src/tools/lookup-movie.js';
 import { compactBookResult, LookupBookInputSchema } from '../../src/tools/lookup-book.js';
 import { Logger } from '../../src/utils/logger.js';
 import type { TMDBSource } from '../../src/sources/tmdb.js';
@@ -81,7 +85,11 @@ function makeBook(): BookResult {
     ratings: {},
     identifiers: { open_library: null, goodreads: null, google_books: null, hardcover: null },
     source_urls: { goodreads: null, open_library: null, google_books: null, hardcover: null },
-    _meta: { sources: ['open_library'], cached: false, timestamp: '2026-06-16T00:00:00.000Z' } as never,
+    _meta: {
+      sources: ['open_library'],
+      cached: false,
+      timestamp: '2026-06-16T00:00:00.000Z',
+    } as never,
   };
 }
 
@@ -111,10 +119,19 @@ describe('compactBookResult (#6)', () => {
 
 function makeMovie(): MovieResult {
   return {
-    title: 'The Matrix', original_title: 'The Matrix', year: 1999,
-    release_date: '1999-03-31', runtime_minutes: 136, genres: ['Action'],
-    description: 'desc', tagline: null, poster_url: null, backdrop_url: null,
-    director: 'Lana Wachowski', directors: ['Lana Wachowski'], cast: [],
+    title: 'The Matrix',
+    original_title: 'The Matrix',
+    year: 1999,
+    release_date: '1999-03-31',
+    runtime_minutes: 136,
+    genres: ['Action'],
+    description: 'desc',
+    tagline: null,
+    poster_url: null,
+    backdrop_url: null,
+    director: 'Lana Wachowski',
+    directors: ['Lana Wachowski'],
+    cast: [],
     collection: { name: null, position: null, total_films: null },
     ratings: {},
     watch_providers: { US: { stream: ['Netflix'] }, GB: { stream: ['Now TV'] } },
@@ -140,7 +157,8 @@ describe('LookupMovieTool watch_providers wiring (#30)', () => {
 
   it('omits watch_providers entirely when include_watch_providers is false', async () => {
     const input = LookupMovieInputSchema.parse({
-      title: 'The Matrix', include_watch_providers: false,
+      title: 'The Matrix',
+      include_watch_providers: false,
     });
     const res = await toolReturning(makeMovie()).execute(input);
     expect(res.watch_providers).toEqual({});
@@ -148,7 +166,8 @@ describe('LookupMovieTool watch_providers wiring (#30)', () => {
 
   it('returns all regions when watch_provider_regions is empty', async () => {
     const input = LookupMovieInputSchema.parse({
-      title: 'The Matrix', watch_provider_regions: [],
+      title: 'The Matrix',
+      watch_provider_regions: [],
     });
     const res = await toolReturning(makeMovie()).execute(input);
     expect(Object.keys(res.watch_providers).sort()).toEqual(['GB', 'US']);

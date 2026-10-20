@@ -22,10 +22,7 @@ describe('OpenLibrarySource', () => {
   beforeEach(() => {
     logger = new Logger('test');
     rateLimiter = new RateLimiter(logger);
-    cache = new SQLiteCache(
-      { path: ':memory:', defaultTTLHours: 24, enabled: true },
-      logger
-    );
+    cache = new SQLiteCache({ path: ':memory:', defaultTTLHours: 24, enabled: true }, logger);
     source = new OpenLibrarySource(cache, logger, rateLimiter);
     vi.clearAllMocks();
   });
@@ -154,10 +151,7 @@ describe('OpenLibrarySource', () => {
         },
       } as any);
 
-      const result = await source.searchByTitleAuthor(
-        'The Name of the Wind',
-        'Patrick Rothfuss'
-      );
+      const result = await source.searchByTitleAuthor('The Name of the Wind', 'Patrick Rothfuss');
 
       expect(result).not.toBeNull();
       expect(result?.title).toBe('The Name of the Wind');
