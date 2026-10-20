@@ -31,10 +31,12 @@ export type RegionalWatchProviders = z.infer<typeof RegionalWatchProvidersSchema
 // Movie ratings from multiple sources
 export const MovieRatingsSchema = z.object({
   tmdb: RatingSchema.optional(),
-  imdb: z.object({
-    score: z.number().nullable(),
-    id: z.string().nullable(),
-  }).optional(),
+  imdb: z
+    .object({
+      score: z.number().nullable(),
+      id: z.string().nullable(),
+    })
+    .optional(),
 });
 export type MovieRatings = z.infer<typeof MovieRatingsSchema>;
 

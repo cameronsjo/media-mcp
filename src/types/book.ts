@@ -2,12 +2,7 @@ import { z } from 'zod';
 import { MetaSchema, RatingSchema } from './common.js';
 
 // Book sources
-export const BookSourceSchema = z.enum([
-  'open_library',
-  'google_books',
-  'goodreads',
-  'hardcover',
-]);
+export const BookSourceSchema = z.enum(['open_library', 'google_books', 'goodreads', 'hardcover']);
 export type BookSource = z.infer<typeof BookSourceSchema>;
 
 // Series information
