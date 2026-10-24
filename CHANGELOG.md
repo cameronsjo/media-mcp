@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Breaking:** the HTTP server now supports bearer-token authentication with `MCP_AUTH_TOKEN` on every route except `GET`/`HEAD /health` (exact path) and CORS preflight, compared in constant time. It refuses to start on a non-loopback host without a token unless `MCP_ALLOW_UNAUTHENTICATED=1` is set. The Docker image listens on `0.0.0.0` inside the container, so Docker deployments must set `MCP_AUTH_TOKEN` and configure clients to send it ([#47](https://github.com/cameronsjo/media-mcp/issues/47)).
 - Removed the `/.well-known/oauth-protected-resource` metadata route, which described OAuth support the server does not have.
+- Goodreads scraping no longer backtracks quadratically on hostile page text. The series-link parser collapses whitespace and skips text over 500 characters (a 50,000-space link took about 4 s), and the rating-count and page-count fallbacks now start a match only at the first digit of a run (a 50,000-digit run took about 9 s per pattern) ([#58](https://github.com/cameronsjo/media-mcp/issues/58)).
 
 ### Fixed
 

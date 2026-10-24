@@ -11,6 +11,49 @@ import { GoodreadsHTMLSchema } from './response-schemas.js';
 const SOURCE: BookSource = 'goodreads';
 const BASE_URL = 'https://www.goodreads.com';
 
+/**
+ * Series-link text comes from scraped HTML, so the page controls it. The
+ * series pattern pairs a lazy group with `\s*`, which backtracks
+ * quadratically on a run of whitespace (seconds at 50,000 characters).
+ * Whitespace is collapsed to single spaces before matching, which removes the
+ * free split points, and the length cap bounds what remains. Real series links
+ * ("The Kingkiller Chronicle #1") are far below the cap.
+ */
+const MAX_SERIES_LINK_TEXT_LENGTH = 500;
+
+/**
+ * Count patterns run over the whole page text. The leading lookbehind lets a
+ * match start only at the first digit of a run; without it an unanchored
+ * search retries from every digit of a long run, which is quadratic.
+ */
+const RATING_COUNT_IN_TEXT = /(?<![\d,])([\d,]+)\s*ratings/;
+const PAGE_COUNT_IN_TEXT = /(?<!\d)(\d+)\s*pages/;
+
+/**
+ * Parse a Goodreads series link's text, such as "The Kingkiller Chronicle #1"
+ * or "The Legacy Series Book 2", into a name and position. Returns null for
+ * text over the length cap, which no real series link reaches.
+ */
+export function parseSeriesLinkText(
+  text: string
+): { name: string; position: number | null } | null {
+  if (text.length > MAX_SERIES_LINK_TEXT_LENGTH) {
+    return null;
+  }
+
+  const collapsed = text.replace(/\s+/g, ' ').trim();
+  const match = collapsed.match(/^(.+?)\s*(?:#|Book\s*)(\d+(?:\.\d+)?)?$/i);
+
+  if (match) {
+    return {
+      name: match[1].trim(),
+      position: match[2] ? parseFloat(match[2]) : null,
+    };
+  }
+
+  return { name: collapsed, position: null };
+}
+
 interface GoodreadsSeriesInfo {
   name: string;
   position: number | null;
@@ -196,7 +239,7 @@ export class GoodreadsSource {
         $('.RatingStatistics__rating').text().trim() || $('[itemprop="ratingValue"]').text().trim();
       // Look for rating count in page text
       const pageText = $.text();
-      const ratingCountMatch = pageText.match(/([\d,]+)\s*ratings/);
+      const ratingCountMatch = pageText.match(RATING_COUNT_IN_TEXT);
       const ratingCountFromAttr = $('[itemprop="ratingCount"]').attr('content');
 
       const rating = ratingText ? parseFloat(ratingText) : null;
@@ -262,7 +305,7 @@ export class GoodreadsSource {
         pageCount = parseInt(pageCountText.replace(/[^\d]/g, ''), 10);
       } else {
         // Fallback: search page text for "N pages" pattern
-        const pagesMatch = pageText.match(/(\d+)\s*pages/);
+        const pagesMatch = pageText.match(PAGE_COUNT_IN_TEXT);
         if (pagesMatch) {
           pageCount = parseInt(pagesMatch[1], 10);
         }
@@ -419,23 +462,15 @@ export class GoodreadsSource {
 
     const href = seriesLink.attr('href') || '';
     const seriesId = this.extractSeriesId(href);
-    const seriesText = seriesLink.text().trim();
+    const parsed = parseSeriesLinkText(seriesLink.text());
 
-    // Parse series name and position from text like "The Kingkiller Chronicle #1"
-    const match = seriesText.match(/^(.+?)\s*(?:#|Book\s*)(\d+(?:\.\d+)?)?$/i);
-
-    if (match) {
-      return {
-        name: match[1].trim(),
-        position: match[2] ? parseFloat(match[2]) : null,
-        totalBooks: null,
-        seriesId: seriesId || '',
-      };
+    if (!parsed) {
+      return null;
     }
 
     return {
-      name: seriesText,
-      position: null,
+      name: parsed.name,
+      position: parsed.position,
       totalBooks: null,
       seriesId: seriesId || '',
     };
