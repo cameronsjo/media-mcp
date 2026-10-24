@@ -223,14 +223,3 @@ export function extractSeriesFromTitle(title: string): {
     seriesPosition: null,
   };
 }
-
-/**
- * Clean a title for better matching
- */
-export function cleanTitle(title: string): string {
-  return title
-    .replace(/\s*\([^)]*\)\s*$/, '') // Remove trailing parenthetical
-    .replace(/\s*:\s*A Novel\s*$/i, '') // Remove ": A Novel"
-    .replace(/\s*:\s*Book\s+\d+\s*$/i, '') // Remove ": Book N"
-    .trim();
-}

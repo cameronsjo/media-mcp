@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Removed the unused exported `cleanTitle` helper from `src/utils/fuzzy-match.ts`. Nothing called it, and its trailing-parenthetical regex backtracked quadratically on whitespace runs.
 - Replaced the custom frontmatter YAML serializer with the maintained `yaml` library, including round-trip coverage for escaped, multiline, nested, and ambiguous values.
 - Consolidated CI workflows (merged test.yml into ci.yml)
 - HTTP `logging/setLevel` now announces `log_level_changed`, matching stdio; omitted `tools/call` arguments now reach `executeToolCall` as `undefined` instead of `{}`.
