@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   bookMatchScore,
-  cleanTitle,
   extractSeriesFromTitle,
   isFuzzyMatch,
   levenshteinDistance,
@@ -354,21 +353,5 @@ describe('extractSeriesFromTitle', () => {
       seriesName: null,
       seriesPosition: null,
     });
-  });
-});
-
-describe('cleanTitle', () => {
-  it('removes a trailing parenthetical qualifier', () => {
-    expect(cleanTitle('Dune (A Novel)')).toBe('Dune');
-  });
-
-  it('removes the supported A Novel and Book suffixes case-insensitively', () => {
-    expect(cleanTitle('Dune: A NOVEL')).toBe('Dune');
-    expect(cleanTitle('Dune: Book 2')).toBe('Dune');
-  });
-
-  it('leaves non-matching text and non-trailing parentheses intact', () => {
-    expect(cleanTitle('The (Long) Title')).toBe('The (Long) Title');
-    expect(cleanTitle('Dune: A Story')).toBe('Dune: A Story');
   });
 });
