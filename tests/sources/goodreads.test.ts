@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { GoodreadsSource } from '../../src/sources/goodreads.js';
+import { GoodreadsSource, parseSeriesLinkText } from '../../src/sources/goodreads.js';
 import { SQLiteCache } from '../../src/cache/sqlite-cache.js';
 import { Logger } from '../../src/utils/logger.js';
 import { RateLimiter } from '../../src/utils/rate-limiter.js';
@@ -219,5 +219,94 @@ describe('GoodreadsSource', () => {
           return entry.level === 'warning' && entry.data.action === 'series_selectors_empty';
         })
     ).toHaveLength(1);
+  });
+
+  it('reads rating and page counts from page text when the attributes are absent', async () => {
+    mockHtml(fixture('modern-search.html'));
+    mockHtml(
+      '<html><body><div class="RatingStatistics__rating">4.2</div>' +
+        '<p>Published 2001, 9,876 ratings and 512 reviews</p><p>First edition, 352 pages</p>' +
+        '</body></html>'
+    );
+
+    const result = await source.searchBook('The Modern Book');
+
+    expect(result).toMatchObject({ rating: { score: 4.2, count: 9876 }, page_count: 352 });
+  });
+
+  it('scans a long digit run in page text without backtracking', async () => {
+    // Before the lookbehind, each count pattern retried from every digit of the
+    // run: about 9 s per pattern at 50,000 digits.
+    mockHtml(fixture('modern-search.html'));
+    mockHtml(
+      '<html><body><div class="RatingStatistics__rating">4.0</div><p>' +
+        '1'.repeat(50_000) +
+        '</p></body></html>'
+    );
+
+    const started = Date.now();
+    const result = await source.searchBook('The Modern Book');
+
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(result).not.toBeNull();
+    expect(result?.rating).toBeUndefined();
+    expect(result?.page_count ?? null).toBeNull();
+  });
+});
+
+describe('parseSeriesLinkText', () => {
+  it.each([
+    ['The Kingkiller Chronicle #1', { name: 'The Kingkiller Chronicle', position: 1 }],
+    ['The Legacy Series Book 2', { name: 'The Legacy Series', position: 2 }],
+    ['Discworld #0.5', { name: 'Discworld', position: 0.5 }],
+    ['The Expanse #', { name: 'The Expanse', position: null }],
+    ['Standalone Series', { name: 'Standalone Series', position: null }],
+    ['  The Modern Series\n      #1  ', { name: 'The Modern Series', position: 1 }],
+    ['The\tWheel  of\u00a0Time #3', { name: 'The Wheel of Time', position: 3 }],
+  ])('parses %j', (text, expected) => {
+    expect(parseSeriesLinkText(text)).toEqual(expected);
+  });
+
+  it('parses text at the length cap and returns null past it', () => {
+    const suffix = ' Series #2';
+    const atCap = 'a'.repeat(500 - suffix.length) + suffix;
+    expect(parseSeriesLinkText(atCap)).toEqual({
+      name: 'a'.repeat(500 - suffix.length) + ' Series',
+      position: 2,
+    });
+    expect(parseSeriesLinkText('a' + atCap)).toBeNull();
+  });
+
+  it('keeps whitespace-run text at the cap fast', () => {
+    // Collapsed, one call takes a few microseconds; without the collapse it takes
+    // about 0.3 ms, so 1,000 calls push a regression past the budget.
+    const text = 'a' + ' '.repeat(498) + '!';
+    const started = Date.now();
+    let result = parseSeriesLinkText(text);
+    for (let run = 1; run < 1000; run += 1) result = parseSeriesLinkText(text);
+    expect(Date.now() - started).toBeLessThan(100);
+    expect(result).toEqual({ name: 'a !', position: null });
+  });
+
+  it('returns null for a long whitespace run without backtracking', () => {
+    const text = 'a' + ' '.repeat(50_000) + '!';
+    const started = Date.now();
+    expect(parseSeriesLinkText(text)).toBeNull();
+    expect(Date.now() - started).toBeLessThan(50);
+  });
+
+  it('uses an input that the pre-fix pattern backtracks on (control)', () => {
+    // The pattern as it stood before the fix, run uncapped and uncollapsed. If this
+    // stops being slow, the timing tests above no longer prove anything.
+    const oldPattern = /^(.+?)\s*(?:#|Book\s*)(\d+(?:\.\d+)?)?$/i;
+    const text = 'a' + ' '.repeat(20_000) + '!';
+    const started = performance.now();
+    text.match(oldPattern);
+    const slow = performance.now() - started;
+    const fixedStarted = performance.now();
+    parseSeriesLinkText(text.slice(0, 500));
+    const fast = performance.now() - fixedStarted;
+    expect(slow).toBeGreaterThan(25);
+    expect(slow).toBeGreaterThan(fast * 20);
   });
 });
