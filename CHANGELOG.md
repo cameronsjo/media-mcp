@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- The Docker image now builds on `node:22-slim` instead of `node:20-slim`. Node 20 is end-of-life and gets no fix for the October and November 2026 Node.js security releases. CI runs on Node 22 only, and `engines.node` is now `>=22` (CAM-721).
 - **Breaking:** the HTTP server now supports bearer-token authentication with `MCP_AUTH_TOKEN` on every route except `GET`/`HEAD /health` (exact path) and CORS preflight, compared in constant time. It refuses to start on a non-loopback host without a token unless `MCP_ALLOW_UNAUTHENTICATED=1` is set. The Docker image listens on `0.0.0.0` inside the container, so Docker deployments must set `MCP_AUTH_TOKEN` and configure clients to send it ([#47](https://github.com/cameronsjo/media-mcp/issues/47)).
 - Removed the `/.well-known/oauth-protected-resource` metadata route, which described OAuth support the server does not have.
 - Goodreads scraping no longer backtracks quadratically on hostile page text. The series-link parser collapses whitespace and skips text over 500 characters (a 50,000-space link took about 4 s), and the rating-count and page-count fallbacks now start a match only at the first digit of a run (a 50,000-digit run took about 9 s per pattern) ([#58](https://github.com/cameronsjo/media-mcp/issues/58)).

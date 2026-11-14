@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Build stage - use slim for better native module compatibility
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 
 # Install build dependencies for better-sqlite3
 RUN apt-get update && apt-get install -y \
@@ -29,7 +29,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # Production stage
-FROM node:20-slim AS production
+FROM node:22-slim AS production
 
 LABEL org.opencontainers.image.source="https://github.com/cameronsjo/media-mcp" \
       org.opencontainers.image.description="MCP server for enriching book, movie, and TV show metadata" \

@@ -14,7 +14,7 @@ An MCP server that enriches book, movie, and TV show metadata for Obsidian vault
 
 Check that the user has the following installed/configured:
 
-- Node.js 20+ (`node --version`)
+- Node.js 22+ (`node --version`)
 - A [TMDB API key](https://www.themoviedb.org/) (required for movie/TV lookups -- free account, Settings > API > Developer)
 - Optionally: a Google Books API key for enhanced book metadata
 
